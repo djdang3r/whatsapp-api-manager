@@ -12,6 +12,13 @@ class KeywordTrigger extends Model
 {
     use HasFactory, SoftDeletes, GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'keyword_triggers';
+
     protected $primaryKey = 'keyword_trigger_id';
     public $incrementing = false;
     protected $keyType = 'string';
