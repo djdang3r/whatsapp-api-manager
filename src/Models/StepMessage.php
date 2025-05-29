@@ -14,6 +14,13 @@ class StepMessage extends Model
     use HasFactory, SoftDeletes;
     use GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'step_messages';
+
     protected $primaryKey = 'message_id';
     public $incrementing = false;
     protected $keyType = 'string';
