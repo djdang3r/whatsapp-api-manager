@@ -10,6 +10,13 @@ class FlowVariable extends Model
 {
     use HasFactory, GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'flow_variables';
+
     protected $primaryKey = 'variable_id';
     public $incrementing = false;
     protected $keyType = 'string';
