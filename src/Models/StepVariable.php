@@ -14,6 +14,13 @@ class StepVariable extends Model
     use HasFactory, SoftDeletes;
     use GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'step_variables';
+
     protected $primaryKey = 'variable_id';
     public $incrementing = false;
     protected $keyType = 'string';
