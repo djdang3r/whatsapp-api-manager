@@ -15,6 +15,13 @@ class StepTransition extends Model
     use HasFactory, SoftDeletes;
     use GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'step_transitions';
+
     protected $primaryKey = 'transition_id';
     protected $keyType = 'ulid';
     public $incrementing = false;
