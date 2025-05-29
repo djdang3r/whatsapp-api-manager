@@ -13,6 +13,13 @@ class UserResponse extends Model
     use HasFactory, SoftDeletes;
     use GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'user_responses';
+
     protected $primaryKey = 'response_id';
     public $incrementing = false;
     protected $keyType = 'string';
