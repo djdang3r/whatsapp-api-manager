@@ -13,6 +13,13 @@ class WhatsappBusinessProfile extends Model
     use HasFactory, SoftDeletes;
     use GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'whatsapp_business_profiles';
+
     protected $primaryKey = 'whatsapp_business_profile_id';
     public $incrementing = false;
     protected $keyType = 'string';
