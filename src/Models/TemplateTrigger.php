@@ -13,6 +13,13 @@ class TemplateTrigger extends Model
 {
     use HasFactory, SoftDeletes, GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'template_triggers';
+
     protected $primaryKey = 'template_trigger_id';
     public $incrementing = false;
     protected $keyType = 'string';
