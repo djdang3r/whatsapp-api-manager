@@ -14,7 +14,7 @@ class BusinessProfileValidator
         'description' => 'nullable|string|max:512',
         'email' => 'nullable|email|max:128', // Hacer explícitamente nullable
         'profile_picture_url' => 'nullable|url|max:512',
-        'vertical' => 'nullable|string|in:UNDEFINED,OTHER,PROFESSIONAL_SERVICES,ENTERTAIN,EVENT_PLAN',
+        'vertical' => 'nullable|string|in:UNDEFINED,OTHER,PROFESSIONAL_SERVICES,PROF_SERVICES,ENTERTAIN,EVENT_PLAN',
         'websites' => 'nullable|array',
         'websites.*' => 'url|max:512',
         'messaging_product' => 'required|string|in:whatsapp',
