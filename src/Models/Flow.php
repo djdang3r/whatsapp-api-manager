@@ -14,6 +14,13 @@ class Flow extends Model
     use HasFactory, SoftDeletes;
     use GeneratesUlid;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'flows';
+
     protected $primaryKey = 'flow_id';
     public $incrementing = false;
     protected $keyType = 'string';
