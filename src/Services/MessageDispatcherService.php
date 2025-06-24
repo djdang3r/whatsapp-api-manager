@@ -143,14 +143,14 @@ class MessageDispatcherService
         // Verificar que el mensaje de contexto exista
         $contextMessage = WhatsappModelResolver::message()->where('wa_id', $contextMessageId)->first();
 
-        Log::channel('whatsapp')->info('Mensaje de replica.', ['message' => $contextMessage, 'message_id' => $contextMessage->message_id, 'wa_id' => $contextMessage->wa_id]);
-
         if (!$contextMessage) {
             Log::channel('whatsapp')->error('El mensaje de contexto no existe en la base de datos.', [
                 'contextMessageId' => $contextMessageId,
             ]);
             throw new \InvalidArgumentException('El mensaje de contexto no existe.');
         }
+
+        Log::channel('whatsapp')->info('Mensaje de replica.', ['message' => $contextMessage, 'message_id' => $contextMessage->message_id, 'wa_id' => $contextMessage->wa_id]);
 
         $fullPhoneNumber = CountryCodes::normalizeInternationalPhone($countryCode, $phoneNumber)['fullPhoneNumber'];
 
@@ -2979,7 +2979,7 @@ class MessageDispatcherService
 
     /**
      * Envía un mensaje con un producto del catálogo
-     * 
+     *
      * @param string $phoneNumberId ID del número telefónico registrado
      * @param string $countryCode Código de país del destinatario
      * @param string $phoneNumber Número de teléfono del destinatario
@@ -3010,7 +3010,7 @@ class MessageDispatcherService
 
         // Validar el número de teléfono
         $phoneNumberModel = $this->validatePhoneNumber($phoneNumberId);
-        
+
         // Verificar que el número tiene un catálogo asociado
         if (!$phoneNumberModel->catalog_id) {
             throw new \RuntimeException('El número telefónico no tiene un catálogo asociado.');
@@ -3058,7 +3058,7 @@ class MessageDispatcherService
 
     /**
      * Envía un mensaje con múltiples productos
-     * 
+     *
      * @param string $phoneNumberId ID del número telefónico registrado
      * @param string $countryCode Código de país del destinatario
      * @param string $phoneNumber Número de teléfono del destinatario
@@ -3104,7 +3104,7 @@ class MessageDispatcherService
 
         // Validar el número de teléfono
         $phoneNumberModel = $this->validatePhoneNumber($phoneNumberId);
-        
+
         // Verificar que el número tiene un catálogo asociado
         if (!$phoneNumberModel->catalog_id) {
             throw new \RuntimeException('El número telefónico no tiene un catálogo asociado.');
@@ -3162,7 +3162,7 @@ class MessageDispatcherService
 
     /**
      * Envía un mensaje con el catálogo completo
-     * 
+     *
      * @param string $phoneNumberId ID del número telefónico registrado
      * @param string $countryCode Código de país del destinatario
      * @param string $phoneNumber Número de teléfono del destinatario
@@ -3196,7 +3196,7 @@ class MessageDispatcherService
 
         // Validar el número de teléfono
         $phoneNumberModel = $this->validatePhoneNumber($phoneNumberId);
-        
+
         // Verificar que el número tiene un catálogo asociado
         if (!$phoneNumberModel->catalog_id) {
             throw new \RuntimeException('El número telefónico no tiene un catálogo asociado.');
@@ -3252,7 +3252,7 @@ class MessageDispatcherService
 
     /**
      * Obtiene el ID interno del mensaje de contexto
-     * 
+     *
      * @param string $contextMessageId WA_ID del mensaje de contexto
      * @return int|null
      */
@@ -3528,11 +3528,11 @@ class MessageDispatcherService
                             }, $parameters['buttons'])
                         ]
                     ];
-                    
+
                     if (!empty($parameters['footer'])) {
                         $interactiveData['footer'] = ['text' => $parameters['footer']];
                     }
-                } 
+                }
                 elseif ($interactiveType === 'list') {
                     $interactiveData = [
                         'type' => 'list',
@@ -3542,14 +3542,14 @@ class MessageDispatcherService
                             'sections' => $parameters['sections']
                         ]
                     ];
-                    
+
                     if (!empty($parameters['header'])) {
                         $interactiveData['header'] = [
                             'type' => 'text',
                             'text' => $parameters['header']
                         ];
                     }
-                    
+
                     if (!empty($parameters['footer'])) {
                         $interactiveData['footer'] = ['text' => $parameters['footer']];
                     }
@@ -3563,18 +3563,18 @@ class MessageDispatcherService
                             'sections' => $parameters['sections']
                         ]
                     ];
-                    
+
                     if (!empty($parameters['header'])) {
                         $interactiveData['header'] = [
                             'type' => 'text',
                             'text' => $parameters['header']
                         ];
                     }
-                    
+
                     if (!empty($parameters['footer'])) {
                         $interactiveData['footer'] = ['text' => $parameters['footer']];
                     }
-                } 
+                }
                 elseif ($interactiveType === 'catalog') {
                     $interactiveData = [
                         'type' => 'catalog_message',
@@ -3586,7 +3586,7 @@ class MessageDispatcherService
                             ]
                         ]
                     ];
-                    
+
                     if (!empty($parameters['footer'])) {
                         $interactiveData['footer'] = ['text' => $parameters['footer']];
                     }
@@ -3594,13 +3594,13 @@ class MessageDispatcherService
 
                 $data['interactive'] = $interactiveData;
                 break;
-            
+
             case 'product':
                 $data['product'] = [
                     'id' => $parameters['product_retailer_id'],
                     'product_retailer_id' => $parameters['product_retailer_id'],
                 ];
-                
+
                 if (!empty($parameters['body'])) {
                     $data['text'] = ['body' => $parameters['body']];
                 }
