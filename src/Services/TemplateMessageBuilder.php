@@ -130,7 +130,7 @@ class TemplateMessageBuilder
         if ($versionId) {
             $this->templateVersion = WhatsappModelResolver::template_version()->find($versionId);
         }
-        
+
         $this->fetchTemplateStructure();
         return $this;
     }
@@ -236,7 +236,7 @@ class TemplateMessageBuilder
 
         // Crear mapa texto->índice si no existe
         if (empty($this->buttonTextIndexMap)) {
-            foreach ($this->templateStructure['BUTTONS'] as $index => $button) {
+            foreach ($this->templateStructure['BUTTONS']['content']['buttons'] as $index => $button) {
                 $this->buttonTextIndexMap[$button['text']] = $index;
             }
         }
@@ -256,11 +256,11 @@ class TemplateMessageBuilder
     {
         $buttonComponents = [];
 
-        if (!isset($this->templateStructure['BUTTONS'])) {
+        if (!isset($this->templateStructure['BUTTONS']['content']['buttons'])) {
             return [];
         }
 
-        foreach ($this->templateStructure['BUTTONS'] as $index => $button) {
+        foreach ($this->templateStructure['BUTTONS']['content']['buttons'] as $index => $button) {
             $buttonType = strtoupper($button['type'] ?? '');
             $subType = strtolower($buttonType);
 
@@ -399,11 +399,20 @@ class TemplateMessageBuilder
 
         // Obtener versión activa si no se especificó
         if (!$this->templateVersion) {
-            $this->templateVersion = $this->template->activeVersion;
+            $this->templateVersion = $template->activeVersion;
         }
 
+        $this->templateStructure = [
+            'template_version_structure' => $this->templateVersion->template_structure, //No se si sea necesario esto para mas adelante, sino solo hay que comentar esta línea
+            'language' => $template->language,
+            'HEADER' => $template->components->where('type', 'header')->first()->toArray(),
+            'BODY' => $template->components->where('type', 'body')->first()->toArray(),
+            'FOOTER' => $template->components->where('type', 'footer')->first()->toArray(),
+            'BUTTONS' => $template->components->where('type', 'button')->first()->toArray(),
+        ];
+
         // Cargar la estructura desde la versión
-        $this->templateStructure = $this->templateVersion->template_structure;
+        //$this->templateStructure = $this->templateVersion->template_structure;
 
         Log::channel('whatsapp')->info('Estructura de plantilla cargada desde versión', [
             'version_id' => $this->templateVersion->version_id,
@@ -466,7 +475,7 @@ class TemplateMessageBuilder
                     break;
                 }
             }
-            
+
             if (!$found) {
                 throw new InvalidArgumentException("Componente '$componentType' no definido en la plantilla.");
             }
@@ -474,7 +483,7 @@ class TemplateMessageBuilder
 
         // Validación especial para headers
         if ($componentType === 'HEADER' && $subType) {
-            $allowedFormats = $this->templateStructure['HEADER']['formats'] ?? [];
+            $allowedFormats = $this->templateStructure['HEADER']['content']['format'] ?? [];
             $allowedFormats = array_map('strtoupper', (array)$allowedFormats);
 
             if (!in_array(strtoupper($subType), $allowedFormats)) {
@@ -492,10 +501,13 @@ class TemplateMessageBuilder
     {
         $components = [];
 
+        //Aquí hay problema, no se están agregando los componentes de HEADER, BODY y FOOTER
+        dd($this->templateStructure);
+
         // Procesar HEADER, BODY, FOOTER
         foreach ($this->templateStructure['components'] ?? [] as $componentDef) {
             $componentType = strtoupper($componentDef['type'] ?? '');
-            
+
             if (isset($this->components[$componentType])) {
                 $components[] = [
                     'type' => strtolower($componentType),
@@ -518,6 +530,8 @@ class TemplateMessageBuilder
                 'components' => $components
             ]
         ];
+
+        dd($payload);
 
         Log::channel('whatsapp')->info('Payload construido para el mensaje de plantilla.', ['payload' => $payload]);
 
