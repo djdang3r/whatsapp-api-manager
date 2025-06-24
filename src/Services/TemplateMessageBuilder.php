@@ -150,34 +150,25 @@ class TemplateMessageBuilder
 
         $formattedParams = [];
 
-        if( $type=='IMAGE' ){
-            //foreach ($content as $item) {
-                $formattedParams[] = [
-                    'type' => 'image',
-                    'image' => [
-                        'link' => $content
-                    ]
-                ];
-            //}
-
-            $this->components['HEADER']['type'] = 'header';
-        }
-        else{
-            if (!is_array($content)) {
-                $content = [$content];
-            }
-
+        if ($type === 'IMAGE') {
+            $formattedParams[] = [
+                'type' => 'image',
+                'image' => ['link' => $content]
+            ];
+        } else {
+            if (!is_array($content)) $content = [$content];
+            
             foreach ($content as $item) {
                 $formattedParams[] = [
                     'type' => 'text',
-                    'link' => $item
+                    'text' => $item
                 ];
             }
-
-            $this->components['HEADER']['type'] = $type;
         }
 
-        $this->components['HEADER']['parameters'] = $formattedParams;
+        $this->components['HEADER'] = [
+            'parameters' => $formattedParams
+        ];
 
         return $this;
     }
@@ -236,48 +227,84 @@ class TemplateMessageBuilder
 
         // Crear mapa texto->índice si no existe
         if (empty($this->buttonTextIndexMap)) {
+<<<<<<< HEAD
             foreach ($this->templateStructure['BUTTONS']['content']['buttons'] as $index => $button) {
                 $this->buttonTextIndexMap[$button['text']] = $index;
+=======
+            // Buscar componente de botones - intentar con diferentes casos
+            $buttonsComponent = $this->templateStructure['by_type']['BUTTONS'] ?? 
+                                $this->templateStructure['by_type']['buttons'] ?? 
+                                null;
+            
+            if ($buttonsComponent && isset($buttonsComponent['buttons'])) {
+                foreach ($buttonsComponent['buttons'] as $index => $button) {
+                    // Usar texto normalizado (trim + minúsculas) para evitar problemas de formato
+                    $normalizedText = strtolower(trim($button['text']));
+                    $this->buttonTextIndexMap[$normalizedText] = $index;
+                }
+>>>>>>> main
             }
         }
 
-        if (!isset($this->buttonTextIndexMap[$buttonText])) {
+        if (empty($this->buttonTextIndexMap)) {
+            throw new InvalidArgumentException("La plantilla no contiene botones.");
+        }
+
+        // Normalizar el texto del botón buscado
+        $normalizedButtonText = strtolower(trim($buttonText));
+        
+        if (!isset($this->buttonTextIndexMap[$normalizedButtonText])) {
             $availableButtons = implode("', '", array_keys($this->buttonTextIndexMap));
             throw new InvalidArgumentException(
                 "Botón '$buttonText' no encontrado. Botones disponibles: '$availableButtons'"
             );
         }
 
-        $this->buttonParameters[$this->buttonTextIndexMap[$buttonText]] = $parameters;
+        $this->buttonParameters[$this->buttonTextIndexMap[$normalizedButtonText]] = $parameters;
         return $this;
     }
 
     protected function buildButtonComponents(): array
     {
         $buttonComponents = [];
+<<<<<<< HEAD
 
         if (!isset($this->templateStructure['BUTTONS']['content']['buttons'])) {
             return [];
         }
 
         foreach ($this->templateStructure['BUTTONS']['content']['buttons'] as $index => $button) {
+=======
+        
+        // Buscar componente de botones
+        $buttonsComponent = $this->templateStructure['by_type']['BUTTONS'] ?? null;
+        
+        if (!$buttonsComponent || empty($buttonsComponent['buttons'])) {
+            return [];
+        }
+
+        $buttons = $buttonsComponent['buttons'];
+
+        foreach ($buttons as $index => $button) {
+>>>>>>> main
             $buttonType = strtoupper($button['type'] ?? '');
             $subType = strtolower($buttonType);
 
-            // Solo agregar componente si tiene parámetros dinámicos
-            if ($this->buttonRequiresParameters($button) && isset($this->buttonParameters[$index])) {
+            // Solo botones de URL con placeholders necesitan parámetros
+            if ($buttonType === 'URL' && 
+                isset($button['url']) && 
+                preg_match('/\{\{\d+\}\}/', $button['url']) &&
+                isset($this->buttonParameters[$index])
+            ) {
                 $parameters = [];
                 foreach ($this->buttonParameters[$index] as $param) {
-                    $parameters[] = [
-                        'type' => 'text',
-                        'text' => $param
-                    ];
+                    $parameters[] = ['type' => 'text', 'text' => $param];
                 }
 
                 $buttonComponents[] = [
                     'type' => 'button',
                     'sub_type' => $subType,
-                    'index' => $index,
+                    'index' => (string)$index,
                     'parameters' => $parameters
                 ];
             }
@@ -388,7 +415,6 @@ class TemplateMessageBuilder
     protected function fetchTemplateStructure(): void
     {
         $template = WhatsappModelResolver::template()
-            ->with('components')
             ->where('name', $this->templateIdentifier)
             ->where('whatsapp_business_id', $this->phone->businessAccount->whatsapp_business_id)
             ->first();
@@ -397,11 +423,13 @@ class TemplateMessageBuilder
             throw new InvalidArgumentException("Plantilla '{$this->templateIdentifier}' no encontrada.");
         }
 
-        // Obtener versión activa si no se especificó
+        $this->template = $template;
+
         if (!$this->templateVersion) {
             $this->templateVersion = $template->activeVersion;
         }
 
+<<<<<<< HEAD
         $this->templateStructure = [
             'template_version_structure' => $this->templateVersion->template_structure, //No se si sea necesario esto para mas adelante, sino solo hay que comentar esta línea
             'language' => $template->language,
@@ -413,10 +441,25 @@ class TemplateMessageBuilder
 
         // Cargar la estructura desde la versión
         //$this->templateStructure = $this->templateVersion->template_structure;
+=======
+        $rawStructure = $this->templateVersion->template_structure;
+        
+        // Reorganizar estructura para fácil acceso
+        $this->templateStructure = [
+            'language' => $this->template->language,
+            'components' => $rawStructure,
+            'by_type' => []
+        ];
+>>>>>>> main
 
-        Log::channel('whatsapp')->info('Estructura de plantilla cargada desde versión', [
-            'version_id' => $this->templateVersion->version_id,
-            'structure' => $this->templateStructure
+        // Crear índice por tipo de componente
+        foreach ($rawStructure as $component) {
+            $type = strtoupper($component['type'] ?? '');
+            $this->templateStructure['by_type'][$type] = $component;
+        }
+
+        Log::channel('whatsapp')->info('Estructura de plantilla procesada', [
+            'by_type' => array_keys($this->templateStructure['by_type'])
         ]);
     }
 
@@ -466,6 +509,7 @@ class TemplateMessageBuilder
     {
         $componentType = strtoupper($componentType);
 
+<<<<<<< HEAD
         if (!isset($this->templateStructure[$componentType])) {
             // Si no está en la estructura principal, verificar en los componentes
             $found = false;
@@ -479,15 +523,25 @@ class TemplateMessageBuilder
             if (!$found) {
                 throw new InvalidArgumentException("Componente '$componentType' no definido en la plantilla.");
             }
+=======
+        // Verificar si el componente existe en el índice por tipo
+        if (!isset($this->templateStructure['by_type'][$componentType])) {
+            throw new InvalidArgumentException("Componente '$componentType' no definido en la plantilla.");
+>>>>>>> main
         }
 
         // Validación especial para headers
         if ($componentType === 'HEADER' && $subType) {
+<<<<<<< HEAD
             $allowedFormats = $this->templateStructure['HEADER']['content']['format'] ?? [];
+=======
+            $headerComponent = $this->templateStructure['by_type']['HEADER'];
+            $allowedFormats = $headerComponent['format'] ?? [];
+>>>>>>> main
             $allowedFormats = array_map('strtoupper', (array)$allowedFormats);
 
             if (!in_array(strtoupper($subType), $allowedFormats)) {
-                throw new InvalidArgumentException("Formato '$subType' no permitido para el header. Formatos válidos: " . implode(', ', $allowedFormats));
+                throw new InvalidArgumentException("Formato '$subType' no permitido. Formatos válidos: " . implode(', ', $allowedFormats));
             }
         }
     }

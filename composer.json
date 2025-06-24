@@ -2,7 +2,7 @@
     "$schema": "https://json-schema.org/draft-04/schema#",
     "title": "Composer Package",
     "name": "scriptdevelop/whatsapp-manager",
-    "version": "1.0.371",
+    "version": "1.0.372",
     "description": "Paquete para manejo de WhatsApp Business API en Laravel",
     "keywords": ["whatsapp", "laravel", "api", "messaging", "chat", "notifications"],
     "type": "library",
