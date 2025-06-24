@@ -3869,7 +3869,7 @@ class MessageDispatcherService
 
                 file_put_contents($localFilePath, $response);
 
-                Log::channel('whatsapp')->info('Archivo descargado exitosamente.', ['localFilePath' => $localFilePath, 'response' => $response]);
+                // Log::channel('whatsapp')->info('Archivo descargado exitosamente.', ['localFilePath' => $localFilePath, 'response' => $response]);
 
                 $publicPath = Storage::url("public/whatsapp/".$mediaType."/".$fileName);
 
