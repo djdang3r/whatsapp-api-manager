@@ -101,8 +101,8 @@ class TemplateService
 
             $apiTemplateIds = collect($templates)->pluck('id')->toArray();
             WhatsappModelResolver::template()->where('whatsapp_business_id', $account->whatsapp_business_id)
-                    ->whereNotIn('wa_template_id', $apiTemplateIds)
-                    ->update(['status' => 'INACTIVE']);
+                ->whereNotIn('wa_template_id', $apiTemplateIds)
+                ->update(['status' => 'INACTIVE']);
 
             return WhatsappModelResolver::template()->where('whatsapp_business_id', $account->whatsapp_business_id)
                 ->with(['category', 'components'])
@@ -344,7 +344,7 @@ class TemplateService
     {
         $template = WhatsappModelResolver::template()->where('wa_template_id', $templateId)->first();
 
-        if(!$template){
+        if (!$template) {
             Log::channel('whatsapp')->error('La plantilla no existe!', [
                 'wa_template_id' => $templateId
             ]);
@@ -420,7 +420,7 @@ class TemplateService
     {
         $template = WhatsappModelResolver::template()->where('name', $templateName)->first();
 
-        if(!$template){
+        if (!$template) {
             Log::channel('whatsapp')->error('La plantilla no existe!', [
                 'name' => $templateName
             ]);
@@ -754,10 +754,17 @@ class TemplateService
         // Extraer solo el nombre del archivo
         $fileName = basename($filePath);
 
+        // Obtener el App ID (Usar el de la cuenta, o el global si es nulo por registro embebido)
+        $appId = !empty($account->app_id) ? $account->app_id : config('whatsapp.meta_auth.client_id');
+
+        if (empty($appId)) {
+            throw new \RuntimeException("No se encontró un App ID válido para crear la sesión de carga. Verifica la configuración 'whatsapp.meta_auth.client_id'.");
+        }
+
         // Construir la URL completa
         $baseUrl = config('whatsapp.api.base_url', 'https://graph.facebook.com');
         $version = config('whatsapp.api.version', 'v22.0');
-        $url = rtrim($baseUrl, '/') . '/' . ltrim($version, '/') . '/' . $account->app_id . '/uploads';
+        $url = rtrim($baseUrl, '/') . '/' . ltrim($version, '/') . '/' . $appId . '/uploads';
 
         $headers = [
             'Authorization: Bearer ' . $account->api_token,
