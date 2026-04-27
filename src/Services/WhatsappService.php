@@ -160,7 +160,7 @@ class WhatsappService
         $url = Endpoints::build(
             Endpoints::GET_PHONE_DETAILS,
             [
-                'version' => config('whatsapp-manager.api.version'),
+                'version' => config('whatsapp.api.version'),
                 'phone_number_id' => $phoneNumberId
             ]
         ) . '?fields=name_status';
@@ -189,7 +189,7 @@ class WhatsappService
         $url = Endpoints::build(
             Endpoints::GET_PHONE_DETAILS,
             [
-                'version' => config('whatsapp-manager.api.version'),
+                'version' => config('whatsapp.api.version'),
                 'phone_number_id' => $phoneNumberId
             ]
         ) . '?fields=' . $fields;
@@ -251,14 +251,14 @@ class WhatsappService
     public function updateBusinessAccount(string $businessAccountId, array $data): Model
     {
         $account = $this->accountRepo->find($businessAccountId);
-        
+
         if (isset($data['api_token'])) {
             $account->api_token = $data['api_token'];
         }
-        
+
         $account->fill($data);
         $account->save();
-        
+
         return $account;
     }
 
@@ -271,22 +271,22 @@ class WhatsappService
     public function subscribeApp(?array $subscribedFields = null): array
     {
         $this->ensureAccountIsSet();
-        
+
         // Si no se proporcionan campos, usar los de configuración
         if ($subscribedFields === null) {
-            $subscribedFields = config('whatsapp-manager.webhook.subscribed_fields', []);
+            $subscribedFields = config('whatsapp.webhook.subscribed_fields', []);
         }
-        
+
         $requestBody = [];
         if (!empty($subscribedFields)) {
             $requestBody['subscribed_fields'] = $subscribedFields;
         }
-        
+
         Log::channel('whatsapp')->debug('Suscribiendo aplicación', [
             'business_id' => $this->businessAccount->whatsapp_business_id,
             'subscribed_fields' => $subscribedFields
         ]);
-        
+
         $response = $this->apiClient->request(
             'POST',
             Endpoints::SUBSCRIBE_APP,
@@ -301,14 +301,14 @@ class WhatsappService
 
     /**
      * Obtiene los campos suscritos actualmente para una cuenta empresarial
-     * 
+     *
      * @param string $whatsappBusinessId
      * @return array
      */
     public function getSubscribedFields(string $whatsappBusinessId): array
     {
         $this->ensureAccountIsSet();
-        
+
         $response = $this->apiClient->request(
             'GET',
             Endpoints::GET_BUSINESS_ACCOUNT_SUBSCRIPTIONS,
@@ -317,19 +317,19 @@ class WhatsappService
         );
 
         Log::channel('whatsapp')->debug('Campos suscritos actuales:', $response);
-        
+
         // Extraer campos suscritos de la respuesta
         $subscribedFields = [];
         if (isset($response['data'][0]['subscribed_fields'])) {
             $subscribedFields = $response['data'][0]['subscribed_fields'];
         }
-        
+
         return $subscribedFields;
     }
 
     /**
      * Actualiza los campos suscritos para una cuenta empresarial
-     * 
+     *
      * @param string $whatsappBusinessId
      * @param array $subscribedFields
      * @return array
@@ -359,14 +359,14 @@ class WhatsappService
     public function deletePhoneNumber(string $phoneNumberId): bool
     {
         $phone = WhatsappModelResolver::phone_number()->find($phoneNumberId);
-        
+
         if ($phone) {
             if ($phone->businessProfile) {
                 $phone->businessProfile->delete();
             }
             return $phone->delete();
         }
-        
+
         return false;
     }
 
@@ -381,13 +381,13 @@ class WhatsappService
         if (!$phone) {
             throw new \RuntimeException('Número telefónico no encontrado');
         }
-        
+
         $apiPhoneId = $phone->api_phone_number_id;
 
         $endpointUrl = Endpoints::build(Endpoints::CONFIGURE_WEBHOOK, [
             'phone_number_id' => $apiPhoneId
         ]);
-        
+
         Log::channel('whatsapp')->debug('Configurando webhook', [
             'url' => $endpointUrl,
             'webhook_url' => $url,
@@ -399,7 +399,7 @@ class WhatsappService
             'webhook_url' => $url,
             'verify_token' => $verifyToken
         ]);
-        
+
         $response = $this->apiClient->request(
             'POST',
             $endpointUrl,
@@ -412,14 +412,14 @@ class WhatsappService
                 'headers' => $this->getAuthHeaders()
             ]
         );
-        
+
         $phone->update([
             'webhook_configuration' => [
                 'url' => $url,
                 'verify_token' => $verifyToken
             ]
         ]);
-        
+
         return $response;
     }
 
@@ -431,7 +431,7 @@ class WhatsappService
     public function subscribedApps(): array
     {
         $this->ensureAccountIsSet();
-        
+
         $response = $this->apiClient->request(
             'GET',
             Endpoints::GET_BUSINESS_ACCOUNT_SUBSCRIPTIONS,
@@ -451,11 +451,11 @@ class WhatsappService
     public function unsubscribeApp(): array
     {
         $this->ensureAccountIsSet();
-        
+
         Log::channel('whatsapp')->debug('Cancelando suscripción de aplicación', [
             'business_id' => $this->businessAccount->whatsapp_business_id
         ]);
-        
+
         $response = $this->apiClient->request(
             'DELETE',
             Endpoints::UNSUBSCRIBE_APP,
@@ -631,10 +631,10 @@ class WhatsappService
     public function registerPhone(string $phoneNumberId, array $data = []): array
     {
         $this->ensureAccountIsSet();
-        
+
         // Campos por defecto para el registro
         $fields = $data['fields'] ?? 'primary_funding_id';
-        
+
         $url = Endpoints::build(
             Endpoints::GET_BUSINESS_ACCOUNT,
             ['whatsapp_business_id' => $phoneNumberId]
@@ -644,7 +644,7 @@ class WhatsappService
             'phone_number_id' => $phoneNumberId,
             'fields' => $fields
         ]);
-        
+
         $response = $this->apiClient->request(
             'GET',
             $url,

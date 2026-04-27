@@ -186,6 +186,12 @@ return [
                  */
                 'received' => \Scriptdevelop\WhatsappManager\Events\TextMessageReceived::class,
             ],
+            'button' => [
+                /**
+                 * Se dispara cuando se envía al webhook mensaje de recibido de tipo text, recibe como parámetro el objeto de contacto y el objeto de mensaje
+                 */
+                'received' => \Scriptdevelop\WhatsappManager\Events\ButtonMessageReceived::class,
+            ],
             'unsupported' => [
                 /**
                  * Se dispara cuando se envía al webhook mensaje de recibido de tipo unsupported, recibe como parámetro el objeto de contacto y el objeto de mensaje
@@ -349,6 +355,44 @@ return [
             'sticker' => ['image/webp'], // Stickers
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Configuración de Descarga de Multimedia de Plantillas
+    |--------------------------------------------------------------------------
+    |
+    | El paquete cuenta con un sistema de descarga de archivo multimedia cuando un Template se crea/edita y el HEADER tiene un archivo, imagen o video; la siguiente variable indica si se descargará el archivo multimedia y almacenarlo localmente, por lo tanto la versión de un template tendrá su archivo multimedia, si se quiere usar esta funcion debe ponerse la siguiente  variable en true, PERO, esto hará que se dispare un trabajo en colado por lo que deberá tenerse en cuenta que se debe configurar el sistema de colas de Laravel y tener un worker ejecutándose, el comando para ejecutar el worker es php artisan queue:work, se recomienda usar un sistema de colas como redis o rabbitmq para esto, y configurar el worker para que solo ejecute la cola de multimedia, por ejemplo:
+    | php artisan queue:work --queue=default
+    |
+    */
+    'using_queue_download_multimedia' => env('WHATSAPP_USING_QUEUE_DOWNLOAD_MULTIMEDIA', false),
+
+    /*
+    |---------------------------------------------------------------------------
+    | Configuración de la Cola para Descarga de Multimedia de Plantillas
+    |--------------------------------------------------------------------------
+    |
+    | Por default la queue que se usará para descargar el multimedia de las versiones de plantilla es "default", pero se puede configurar para que use otra cola, por ejemplo "high" o "multimedia", recuerda configurar tu worker para que ejecute esa cola, por ejemplo:
+    | php artisan queue:work --queue=high,default,low
+    | Nota: Esta queue solo funciona si está en true la opción using_queue_download_multimedia
+    |
+    */
+    'queue_multimedia_name' => env('WHATSAPP_QUEUE_MULTIMEDIA_NAME', 'default'),
+
+    /*
+    |---------------------------------------------------------------------------
+    | Paqueterías de Compresión de Multimedia de Plantillas
+    |---------------------------------------------------------------------------
+    |
+    | El paquete cuenta con un sistema de compresión de archivos multimedia para las versiones de plantilla, esto para prevenir un hipotético escenario, es decir, cuando se crea un template y el header tiene un archivo multimedia, al subir ese archivo a la API de WhatsApp Business Meta, esta hace un proceso interno que desconocemos donde puede ser que el archivo cambie su tamaño, por ejemplo, si se sube un video de 10 megas, la URL que retorna WhatsApp para ese video puede ser que al intentar descargarse pese 20 megas, esto es un problema porque el límite de tamaño para los archivos multimedia en las plantillas es de 16 megas para videos y 5 megas para imágenes, por lo tanto, este paquete cuenta con un sistema de compresión de archivos multimedia para las versiones de plantilla, el cual se activa cuando se intenta descargar el archivo multimedia desde la URL que retorna WhatsApp Business Meta y se verifica que el tamaño del archivo supera el límite permitido, si esto ocurre, el paquete intentará hacer una compresión del archivo para reducir su tamaño a 16 megas o menos en el caso de videos, o 5 megas o menos en el caso de imágenes (Hacer una compresión puede llevar a una pérdida de calidad), pero para que este sistema de compresión funcione correctamente, es necesario tener instaladas las siguientes librerías en el servidor:
+    | ffmpeg para la compresión de videos se puede instalar en linux con el comando sudo apt-get install ffmpeg
+    | php-gd para la compresión de imágenes se puede instalar en linux con el comando sudo apt-get install php-gd
+    | Una vez que ya los tengas instalados configura las siguientes 3 variables en true para que el sistema de compresión funcione, recuerda que esto también se hace en un trabajo encolado, por lo que debes configurar tu sistema de colas y tener un worker ejecutándose para que funcione correctamente, el comando para ejecutar el worker es php artisan queue:work
+    |
+    */
+    'allow_compression_multimedia_template' => env('WHATSAPP_ALLOW_COMPRESSION_MULTIMEDIA_TEMPLATE', false),
+    'package_ffmpeg_installed' => env('WHATSAPP_PACKAGE_FFMPEG_INSTALLED', false),
+    'package_php_gd_installed' => env('WHATSAPP_PACKAGE_PHP_GD_INSTALLED', false),
 
     /*
     |--------------------------------------------------------------------------

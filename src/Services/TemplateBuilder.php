@@ -214,11 +214,36 @@ class TemplateBuilder
             // Validar tipo de archivo
             $this->templateService->validateMediaFile($filePath, $mimeType);
 
-            // Crear sesión de carga
-            $sessionId = $this->templateService->createUploadSession($this->account, $filePath, $mimeType);
-            $mediaId = $this->templateService->uploadMedia($this->account, $sessionId, $filePath, $mimeType);
+            $prepared = $this->templateService->prepareMediaForTemplateUpload($filePath, $mimeType);
+            $uploadFilePath = $prepared['file_path'];
+            $uploadMimeType = $prepared['mime_type'];
+            $cleanupPreparedFile = (bool) ($prepared['cleanup'] ?? false);
+            $fileChanged = (bool) ($prepared['changed'] ?? false);
 
-            $mediaId = explode("\n", trim($mediaId))[0];
+            Log::channel('whatsapp')->info('Preparación de media completada para template.', [
+                'file_changed' => $fileChanged,
+                'original_path' => $filePath,
+                'upload_path' => $uploadFilePath,
+                'mime_type' => $uploadMimeType,
+            ]);
+
+            if ($fileChanged) {
+                // Validar nuevamente el archivo que realmente se subirá.
+                $this->templateService->validateMediaFile($uploadFilePath, $uploadMimeType);
+            }
+
+            // Crear sesión de carga
+            try {
+                $sessionId = $this->templateService->createUploadSession($this->account, $uploadFilePath, $uploadMimeType);
+                $mediaId = $this->templateService->uploadMedia($this->account, $sessionId, $uploadFilePath, $uploadMimeType);
+            } finally {
+                if ($cleanupPreparedFile && is_file($uploadFilePath)) {
+                    @unlink($uploadFilePath);
+                }
+            }
+
+            //No se debe obtener el primer elemento del mediaId cuando hay saltos de línea, ya que el handle correcto es el que se obtiene en la respuesta del POST, por eso se comentó la línea siguiente, si se obtiene el primer elemento, se estaría truncando el handle y provoca que no se use correctamente el archivo multimedia cargado
+            //$mediaId = explode("\n", trim($mediaId))[0];
 
             if (!mb_check_encoding($mediaId, 'UTF-8')) {
                 Log::channel('whatsapp')->warning('Corrigiendo codificación de mediaId no UTF-8.', ['mediaId' => $mediaId]);

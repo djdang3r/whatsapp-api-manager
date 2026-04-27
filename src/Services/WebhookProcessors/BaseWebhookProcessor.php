@@ -21,6 +21,8 @@ use ScriptDevelop\WhatsappManager\Events\FlowStatusUpdated;
 use ScriptDevelop\WhatsappManager\Events\BusinessUsernameUpdated;
 use ScriptDevelop\WhatsappManager\Events\UserIdUpdated;
 use ScriptDevelop\WhatsappManager\Services\Flows\FlowMediaService;
+use ScriptDevelop\WhatsappManager\Services\TemplateMediaCompressionService;
+use ScriptDevelop\WhatsappManager\Jobs\CompressTemplateMediaJob;
 
 class BaseWebhookProcessor implements WebhookProcessorInterface
 {
@@ -323,6 +325,13 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             $messageRecord = $this->processReactionMessage($message, $contactRecord, $whatsappPhone);
 
             $this->fireReactionReceived($contactRecord, $messageRecord);
+        }
+
+        //Este sirve por ejemplo cuando se envía un mensaje de tipo template y este tiene un botón de respuesta rápida de tipo QUICK_REPLY, cuando se da click en ese botón se dispara un webhook de tipo "button" que ahora es procesado por el método processButtonMessage
+        if ($messageType === 'button') {
+            $messageRecord = $this->processButtonMessage($message, $contactRecord, $whatsappPhone);
+
+            $this->fireButtonMessageReceived($contactRecord, $messageRecord);
         }
 
         // Manejar mensajes de media
@@ -755,6 +764,52 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
                 'from_parent_bsuid' => $message['from_parent_user_id'] ?? null,
                 'message_to'        => preg_replace('/[\D+]/', '', $whatsappPhone->display_phone_number),
                 'message_type'      => 'TEXT',
+                'message_content' => $textContent,
+                'json_content' => json_encode($message),
+                'status' => 'received',
+                'message_context_id' => $this->getContextMessageId($message),
+            ]
+        );
+
+        Log::channel('whatsapp')->info('Text message processed and saved.', [
+            'message_id' => $messageRecord->message_id,
+            'wa_id' => $message['id'],
+            'content' => $textContent,
+        ]);
+
+        return $messageRecord;
+    }
+
+    protected function processButtonMessage(array $message, Model $contact, Model $whatsappPhone): ?Model
+    {
+        $textContent = $message['button']['text'] ?? $message['button']['payload'] ?? null;
+
+        Log::channel('whatsapp')->info('Processing button message.', [
+            'message' => $message,
+            'contact' => $contact,
+            'whatsappPhone' => $whatsappPhone,
+            'textContent' => $textContent,
+        ]);
+
+        if (!$textContent) {
+            Log::channel('whatsapp')->warning('No text content found in message.', $message);
+            return null;
+        }
+
+        $messageRecord = WhatsappModelResolver::message()->firstOrCreate(
+            [
+                'wa_id' => $message['id'],
+            ],
+            [
+                'whatsapp_phone_id' => $whatsappPhone->phone_number_id,
+                'contact_id' => $contact->contact_id,
+                'conversation_id' => null, // Esto se puede actualizar más tarde si es necesario
+                'messaging_product' => $message['messaging_product'] ?? 'whatsapp',
+                'message_from'      => isset($message['from']) ? preg_replace('/[\D+]/', '', $message['from']) : null,
+                'from_bsuid'        => $message['from_user_id'] ?? null,
+                'from_parent_bsuid' => $message['from_parent_user_id'] ?? null,
+                'message_to'        => preg_replace('/[\D+]/', '', $whatsappPhone->display_phone_number),
+                'message_type'      => 'BUTTON',
                 'message_content' => $textContent,
                 'json_content' => json_encode($message),
                 'status' => 'received',
@@ -1374,6 +1429,17 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         $statusValue = $status['status'] ?? null;
         $timestamp   = $status['timestamp'] ?? null;
         $errorCode   = null;
+
+        if( !empty($message->delivered_at) ){
+            $statusValue = 'delivered';
+        }
+        if( !empty($message->read_at) ){
+            $statusValue = 'read';
+        }
+        if( !empty($message->failed_at) ){
+            $statusValue = 'failed';
+        }
+
         $updateData  = ['status' => $statusValue];
 
         // Guardar BSUID del destinatario si llega en el status (presente en delivered/read cuando se envió por BSUID)
@@ -1792,64 +1858,33 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
 
     protected function saveTemplateVersionMedia(Model $version, string $mediaUrl, string $mediaType): void
     {
-        try {
-            $response = Http::get($mediaUrl);
-            if ($response->successful()) {
-                $mediaContent = $response->body();
-                $extension    = $this->getFileExtension($response->header('Content-Type'));
-                $mediaType    = Str::lower($mediaType);
+        $maxTemplateMediaSize = (int) config('whatsapp.media.max_file_size.video', 16 * 1024 * 1024);
 
-                // Obtener la ruta de almacenamiento configurada desde la config
-                $directory = config('whatsapp.media.storage_path.'.$mediaType.'s'); // Por defecto pluralizar el tipo de media
+        // Ejecutar inmediatamente (sin queue) para mantener el flujo actual.
+        // Futuro: reemplazar por CompressTemplateMediaJob::dispatch(...)
+        /*$compressionJob = new CompressTemplateMediaJob(
+            $template,
+            $version,
+            $mediaUrl,
+            $mediaType,
+            $maxTemplateMediaSize,
+            3
+        );
+        $compressionResult = $compressionJob->handle(new TemplateMediaCompressionService());*/
 
-                if (!$directory) {
-                    throw new \RuntimeException("No se ha configurado una ruta de almacenamiento para el tipo de media: $mediaType");
-                }
-
-                if (!file_exists($directory)) {
-                    mkdir($directory, 0755, true);
-                }
-
-                $fileName = "{$version->version_id}_{$mediaType}.{$extension}";
-                if (Str::endsWith($directory, '/')) {
-                    $directory = rtrim($directory, '/');
-                }
-                $filePath = "{$directory}/{$fileName}";
-                file_put_contents($filePath, $mediaContent);
-
-                // Convertir el path absoluto a relativo para Storage::url
-                $relativePath = str_replace(storage_path('app/public/'), '', $directory . '/' . $fileName);
-
-                // Guardar la URL pública en el campo header_media_url de la versión
-                $publicPath = Storage::url($relativePath);
-
-                WhatsappModelResolver::template_media_file()->create([
-                    'version_id' => $version->version_id,
-                    'media_type' => $mediaType,
-                    'file_name'  => $fileName,
-                    'mime_type'  => $response->header('Content-Type'),
-                    'url'        => $publicPath,
-                    'file_size'  => strlen($mediaContent),
-                ]);
-
-                Log::channel('whatsapp')->info('Template version header media saved', [
-                    'version_id'       => $version->version_id,
-                    'mediaType'        => $mediaType,
-                    'header_media_url' => $publicPath
-                ]);
-            } else {
-                Log::channel('whatsapp')->warning('Failed to download template header media', [
-                    'version_id' => $version->version_id,
-                    'media_url'  => $mediaUrl,
-                    'status'     => $response->status()
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::channel('whatsapp')->error('Error saving template version header media', [
-                'version_id'    => $version->version_id,
-                'media_url'     => $mediaUrl,
-                'error_message' => $e->getMessage()
-            ]);
+        if(
+            config('whatsapp.using_queue_download_multimedia', false)===true and
+            config('whatsapp.package_ffmpeg_installed', false) and
+            config('whatsapp.package_php_gd_installed', false)
+        ){
+            CompressTemplateMediaJob::dispatch(
+                $version,
+                $mediaUrl,
+                $mediaType,
+                $maxTemplateMediaSize,
+                3
+            )
+            ->onQueue(config('whatsapp.queue_multimedia_name', 'default')); // Puedes especificar la queue que desees
         }
     }
 
@@ -2094,6 +2129,19 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
     protected function fireTextMessageReceived($contactRecord, $messageRecord)
     {
         $event = config('whatsapp.events.messages.text.received');
+        event(new $event([
+            'contact' => $contactRecord,
+            'message' => $messageRecord,
+        ]));
+    }
+
+    /**
+     * Ahora el disparo de los eventos estáran en métodos, y se usarán las clases de los eventos configuradas en el archivo de configuración whatsapp.events!
+     */
+
+    protected function fireButtonMessageReceived($contactRecord, $messageRecord)
+    {
+        $event = config('whatsapp.events.messages.button.received');
         event(new $event([
             'contact' => $contactRecord,
             'message' => $messageRecord,

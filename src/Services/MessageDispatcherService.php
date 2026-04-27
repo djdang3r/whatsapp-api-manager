@@ -157,7 +157,7 @@ class MessageDispatcherService
             ], $flowParams, $messageContent);
 
             $response = $this->sendViaApi($phoneNumberModel, $fullPhoneNumber, 'interactive', $parameters);
-            
+
             return $this->handleSuccess($message, $response);
         } catch (WhatsappApiException $e) {
             Log::channel('whatsapp')->error('Error al enviar mensaje Flow por API WhatsApp.', [
@@ -3832,7 +3832,11 @@ class MessageDispatcherService
                     ->where('message_method', 'INPUT')
                     ->where('status', MessageStatus::RECEIVED)
                     ->where('message_id', '<=', $message->message_id)
-                    ->update(['status' => MessageStatus::READ]);
+                    ->whereNull('read_at')
+                    ->update([
+                        'status' => MessageStatus::READ,
+                        'read_at' => now() //Se agrega la estampa de tiempo para saber cuándo se leyó el mensaje, la petición de Whatsapp Business Meta solo retorna { "success": true } por lo que  no tenemos una marca de tiempo, por lo tanto será la fecha actual del servidor al momento de procesar la respuesta de la API
+                    ]);
             }
 
             Log::channel('whatsapp')->info("Acción completada: $action", [
@@ -4266,7 +4270,7 @@ class MessageDispatcherService
                             ]
                         ]
                     ];
-                    
+
                     if (!empty($parameters['mode'])) {
                         $interactiveData['action']['parameters']['mode'] = $parameters['mode'];
                     }
@@ -4280,7 +4284,7 @@ class MessageDispatcherService
                     if (!empty($parameters['flow_action_payload'])) {
                         $interactiveData['action']['parameters']['flow_action_payload'] = $parameters['flow_action_payload'];
                     }
-                    
+
                     if (!empty($parameters['header'])) {
                         $interactiveData['header'] = $parameters['header'];
                     }
