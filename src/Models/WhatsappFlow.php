@@ -49,6 +49,11 @@ class WhatsappFlow extends Model
         'preview_expires_at' => 'datetime',
     ];
 
+    public function setStatusAttribute(string $value): void
+    {
+        $this->attributes['status'] = strtolower($value);
+    }
+
     public function screens()
     {
         return $this->hasMany(config('whatsapp.models.flow_screen'), 'flow_id', 'flow_id');

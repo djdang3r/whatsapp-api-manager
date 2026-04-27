@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.58] - 2026-04-27
+
+### Fixed
+- **WhatsappFlow Model**: Added `setStatusAttribute` mutator to normalize status to lowercase before saving, preventing PostgreSQL check constraint violations when Meta returns uppercase values (e.g., `PUBLISHED`).
+- **FlowService**: `storeOrUpdateFlow()` now uses `strtolower()` on status from Meta API. Also fixed hardcoded `PUBLISHED`/`DEPRECATED` values to use lowercase.
+
+### Changed
+- **Constraint Compatibility**: Enum in migration uses lowercase values only; normalization is handled by the model mutator for cross-database compatibility (MySQL and PostgreSQL).
+
 ## [1.1.57] - 2026-04-25
 
 ### Added

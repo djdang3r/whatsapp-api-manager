@@ -100,7 +100,7 @@ class FlowService
                 'whatsapp_business_account_id' => $businessId,
                 'name' => $flowData['name'],
                 'json_structure' => !empty($flowData['json_structure']) ? $flowData['json_structure'] : null,
-                'status' => $flowData['status'] ?? 'DRAFT',
+                'status' => strtolower($flowData['status'] ?? 'draft'),
                 'version' => $flowData['version'] ?? '1.0',
 
                 'categories' => $flowData['categories'] ?? null,
@@ -303,7 +303,7 @@ class FlowService
             ]);
 
             // Actualizar el estado del flujo en la base de datos
-            $flow->update(['status' => 'PUBLISHED']);
+            $flow->update(['status' => 'published']);
 
             // Sincronizar el flujo con la API para obtener los datos actualizados
             $this->syncFlowById($flow->whatsappBusinessAccount, $flow->wa_flow_id);
@@ -583,7 +583,7 @@ class FlowService
 
         try {
             $this->apiClient->request('POST', $endpoint, [], [], [], $headers);
-            $flow->update(['status' => 'DEPRECATED']);
+            $flow->update(['status' => 'deprecated']);
             return true;
         } catch (\Exception $e) {
             Log::channel('whatsapp')->error('Error al deprecar el flujo: ' . $e->getMessage(), [
