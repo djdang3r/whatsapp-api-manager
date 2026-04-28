@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.59] - 2026-04-28
+
+### Fixed
+- **FlowBuilder::save()**: Ahora establece `application_id`, `application_name` y `application_link` al crear un flow localmente usando `META_CLIENT_ID` de la configuración. Esto previene el error "You need to connect a Meta app to the Flow before you can publish it" cuando se publican flows creados desde la aplicación.
+
 ## [1.1.58] - 2026-04-27
 
 ### Fixed

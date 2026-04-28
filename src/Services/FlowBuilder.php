@@ -283,12 +283,16 @@ class FlowBuilder
             ], [], ['Authorization' => 'Bearer ' . $this->account->api_token]);
 
             // 3. Crear registro local
+            $metaAppId = config('whatsapp.meta_auth.client_id');
             $flow = WhatsappModelResolver::flow()->create([
                 'whatsapp_business_account_id' => $this->account->whatsapp_business_id,
                 'wa_flow_id' => $flowId,
                 'name' => $flowData['name'],
                 'json_structure' => $flowData['json_structure'],
-                'status' => 'DRAFT'
+                'status' => 'DRAFT',
+                'application_id' => $metaAppId,
+                'application_name' => config('app.name', 'WhatsApp Business'),
+                'application_link' => 'https://business.facebook.com/apps/' . $metaAppId,
             ]);
 
             $this->flowService->syncScreensAndElements($flow, $this->screens);
