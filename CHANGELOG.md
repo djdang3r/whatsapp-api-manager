@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.65] - 2026-04-28
+
+### Fixed
+- **FlowEditor**: Mejora en el procesamiento del JSON del editor visual para asegurar que los objetos se traten como objetos (`stdClass`) y no como arreglos asociativos al validar la pantalla terminal. Esto garantiza que los objetos vacíos `{}` se preserven correctamente en el JSON final enviado a Meta.
+
 ## [1.1.64] - 2026-04-28
 
 ### Fixed
