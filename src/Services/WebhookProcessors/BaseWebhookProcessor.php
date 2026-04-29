@@ -21,6 +21,7 @@ use ScriptDevelop\WhatsappManager\Events\FlowStatusUpdated;
 use ScriptDevelop\WhatsappManager\Events\BusinessUsernameUpdated;
 use ScriptDevelop\WhatsappManager\Events\UserIdUpdated;
 use ScriptDevelop\WhatsappManager\Services\Flows\FlowMediaService;
+use ScriptDevelop\WhatsappManager\Models\WhatsappPhoneNumber;
 
 class BaseWebhookProcessor implements WebhookProcessorInterface
 {
@@ -3108,6 +3109,10 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
                 $this->handlePartnerRemoved($wabaInfo);
                 break;
 
+            case 'PHONE_NUMBER_REMOVED':
+                $this->handlePhoneNumberRemoved($data);
+                break;
+
             default:
                 Log::channel('whatsapp')->warning('⚠️ [ACCOUNT] Unhandled account update event', [
                     'event' => $event,
@@ -3117,6 +3122,42 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
 
         // Disparar evento de actualización de cuenta
         $this->fireAccountUpdate($data);
+    }
+
+    /**
+     * Maneja la eliminación de un número de teléfono desde Meta.
+     * Soft-deletea el registro local para que no interfiera con health checks.
+     */
+    protected function handlePhoneNumberRemoved(array $data): void
+    {
+        $displayPhoneNumber = $data['phone_number'] ?? null;
+
+        if (!$displayPhoneNumber) {
+            Log::channel('whatsapp')->warning('📵 [ACCOUNT] PHONE_NUMBER_REMOVED sin phone_number', $data);
+            return;
+        }
+
+        $phone = WhatsappPhoneNumber::where('display_phone_number', $displayPhoneNumber)->first();
+
+        if (!$phone) {
+            Log::channel('whatsapp')->warning('📵 [ACCOUNT] PHONE_NUMBER_REMOVED: número no encontrado en DB', [
+                'display_phone_number' => $displayPhoneNumber,
+            ]);
+            return;
+        }
+
+        $phone->update([
+            'status' => 'removed',
+            'fully_removed_at' => now(),
+            'disconnection_reason' => 'PHONE_NUMBER_REMOVED via Meta webhook',
+        ]);
+
+        $phone->delete();
+
+        Log::channel('whatsapp')->info('✅ [ACCOUNT] PHONE_NUMBER_REMOVED: número soft-deleteado', [
+            'phone_number_id' => $phone->phone_number_id,
+            'display_phone_number' => $displayPhoneNumber,
+        ]);
     }
 
     /**

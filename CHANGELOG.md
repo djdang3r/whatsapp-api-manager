@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.66] - 2026-04-29
+
+### Added
+- Soporte para webhook `PHONE_NUMBER_REMOVED` en `BaseWebhookProcessor.handleAccountUpdate()`
+- Método `handlePhoneNumberRemoved()`: soft-deletea el registro local cuando Meta elimina un número
+
+### Fixed
+- Los números eliminados desde Meta ya no caen en "Unhandled account update event"
+- Al recibir `PHONE_NUMBER_REMOVED`, se marca `status=removed`, `fully_removed_at` y se aplica soft-delete
+- Previene que números desvinculados interfieran con health checks y publicación de flows
+
 ## [1.1.65] - 2026-04-28
 
 ### Fixed
