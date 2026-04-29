@@ -373,29 +373,31 @@ class FlowEditor
      * Si el JSON del editor visual no tiene ninguna pantalla con success:true,
      * agregamos success:true a la última pantalla que tenga terminal:true.
      *
+     * IMPORTANTE: Mantenemos el JSON como string todo lo posible para preservar los tipos.
+     * Solo parseamos y re-codificamos si es necesario agregar success:true.
+     *
      * @param string $jsonString JSON original del editor visual
      * @return string JSON corregido si era necesario, o el original si ya estaba correcto
      */
     protected function ensureSuccessOnTerminalScreen(string $jsonString): string
     {
-        $decoded = json_decode($jsonString, true);
+        $decoded = json_decode($jsonString);
 
-        if (!is_array($decoded) || empty($decoded['screens'])) {
+        if (!is_object($decoded) || !isset($decoded->screens) || !is_array($decoded->screens)) {
             return $jsonString;
         }
 
-        $screens = &$decoded['screens'];
+        $screens = $decoded->screens;
         $totalScreens = count($screens);
 
         // Buscar si alguna pantalla ya tiene success:true
         $hasSuccessScreen = false;
-        foreach ($screens as &$screen) {
-            if (($screen['terminal'] ?? false) === true && ($screen['success'] ?? false) === true) {
+        foreach ($screens as $screen) {
+            if (($screen->terminal ?? false) === true && ($screen->success ?? false) === true) {
                 $hasSuccessScreen = true;
                 break;
             }
         }
-        unset($screen);
 
         // Si ya hay una pantalla con success:true, no modificar
         if ($hasSuccessScreen) {
@@ -404,24 +406,23 @@ class FlowEditor
 
         // Buscar pantallas terminales que podrían necesitar success:true
         $terminalIndexes = [];
-        foreach ($screens as $index => &$screen) {
-            if (($screen['terminal'] ?? false) === true) {
+        foreach ($screens as $index => $screen) {
+            if (($screen->terminal ?? false) === true) {
                 $terminalIndexes[] = $index;
             }
         }
-        unset($screen);
 
         // Si hay pantallas con terminal:true pero sin success:true, agregar success:true
         // a la última pantalla terminal (o la última pantalla si no hay ninguna terminal)
         if (!empty($terminalIndexes)) {
             $lastTerminalIndex = end($terminalIndexes);
-            $screens[$lastTerminalIndex]['terminal'] = true;
-            $screens[$lastTerminalIndex]['success'] = true;
+            $screens[$lastTerminalIndex]->terminal = true;
+            $screens[$lastTerminalIndex]->success = true;
         } else {
             // No hay pantallas con terminal:true, marcar la última como terminal y success
             $lastIndex = $totalScreens - 1;
-            $screens[$lastIndex]['terminal'] = true;
-            $screens[$lastIndex]['success'] = true;
+            $screens[$lastIndex]->terminal = true;
+            $screens[$lastIndex]->success = true;
         }
 
         Log::channel('whatsapp')->info('FlowEditor: agregado success:true a pantalla terminal', [
