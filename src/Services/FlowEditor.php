@@ -267,7 +267,7 @@ class FlowEditor
         //    - rawJsonString: viene del editor visual, ya encodificado — preserva {} correctamente.
         //    - Sin rawJsonString: buildFlowJson() para el flujo builder (API fluida).
         if ($this->rawJsonString !== null) {
-            $jsonString = $this->rawJsonString;
+            $jsonString = $this->ensureSuccessOnTerminalScreen($this->rawJsonString);
         } else {
             $flowJson = $this->buildFlowJson();
             if (empty($flowJson['screens'])) {
@@ -314,7 +314,9 @@ class FlowEditor
     protected function buildFlowJson(): array
     {
         $screens = [];
-        foreach ($this->flowData['json_structure']['screens'] as $screen) {
+        $totalScreens = count($this->flowData['json_structure']['screens']);
+
+        foreach ($this->flowData['json_structure']['screens'] as $index => $screen) {
             if (empty($screen['name'])) {
                 throw new InvalidArgumentException("El campo 'name' es obligatorio para construir el JSON del flujo.");
             }
@@ -325,7 +327,16 @@ class FlowEditor
                 // Lógica para construir elementos...
             }
 
-            $screens[] = [
+            // Determinar si esta pantalla es terminal:
+            // - Si explicitly tiene terminal: true, es terminal
+            // - Si es la última pantalla y no tiene next_screen_id ni routing, es terminal
+            $isExplicitTerminal = ($screen['terminal'] ?? false) === true;
+            $isLastScreen = $index === ($totalScreens - 1);
+            $hasNextScreen = !empty($screen['next_screen_id']) || !empty($screen['routing']);
+
+            $isTerminal = $isExplicitTerminal || ($isLastScreen && !$hasNextScreen);
+
+            $screenData = [
                 'id' => strtoupper($screen['name']),
                 'title' => $screen['title'] ?? '',
                 'layout' => [
@@ -334,11 +345,89 @@ class FlowEditor
                 ],
                 'data' => (object)[],
             ];
+
+            // Solo agregar terminal:true si la pantalla es terminal
+            // Meta requiere que las pantallas terminales tengan success:true
+            if ($isTerminal) {
+                $screenData['terminal'] = true;
+                // success:true indica que esta pantalla representa un resultado exitoso
+                // Solo la última pantalla del flow debería tener success:true
+                if ($isLastScreen) {
+                    $screenData['success'] = true;
+                }
+            }
+
+            $screens[] = $screenData;
         }
 
         return [
             'version' => $this->flowData['json_version'] ?? '7.0',
             'screens' => $screens,
         ];
+    }
+
+    /**
+     * Asegura que al menos una pantalla terminal tenga success:true.
+     *
+     * Meta requiere que "At least one terminal screen must have property 'success' set as true."
+     * Si el JSON del editor visual no tiene ninguna pantalla con success:true,
+     * agregamos success:true a la última pantalla que tenga terminal:true.
+     *
+     * @param string $jsonString JSON original del editor visual
+     * @return string JSON corregido si era necesario, o el original si ya estaba correcto
+     */
+    protected function ensureSuccessOnTerminalScreen(string $jsonString): string
+    {
+        $decoded = json_decode($jsonString, true);
+
+        if (!is_array($decoded) || empty($decoded['screens'])) {
+            return $jsonString;
+        }
+
+        $screens = &$decoded['screens'];
+        $totalScreens = count($screens);
+
+        // Buscar si alguna pantalla ya tiene success:true
+        $hasSuccessScreen = false;
+        foreach ($screens as &$screen) {
+            if (($screen['terminal'] ?? false) === true && ($screen['success'] ?? false) === true) {
+                $hasSuccessScreen = true;
+                break;
+            }
+        }
+        unset($screen);
+
+        // Si ya hay una pantalla con success:true, no modificar
+        if ($hasSuccessScreen) {
+            return $jsonString;
+        }
+
+        // Buscar pantallas terminales que podrían necesitar success:true
+        $terminalIndexes = [];
+        foreach ($screens as $index => &$screen) {
+            if (($screen['terminal'] ?? false) === true) {
+                $terminalIndexes[] = $index;
+            }
+        }
+        unset($screen);
+
+        // Si hay pantallas con terminal:true pero sin success:true, agregar success:true
+        // a la última pantalla terminal (o la última pantalla si no hay ninguna terminal)
+        if (!empty($terminalIndexes)) {
+            $lastTerminalIndex = end($terminalIndexes);
+            $screens[$lastTerminalIndex]['terminal'] = true;
+            $screens[$lastTerminalIndex]['success'] = true;
+        } else {
+            // No hay pantallas con terminal:true, marcar la última como terminal y success
+            $lastIndex = $totalScreens - 1;
+            $screens[$lastIndex]['terminal'] = true;
+            $screens[$lastIndex]['success'] = true;
+        }
+
+        Log::channel('whatsapp')->info('FlowEditor: agregado success:true a pantalla terminal', [
+            'flow_id' => $this->flow->wa_flow_id ?? 'unknown',
+        ]);
+
+        return json_encode($decoded, JSON_UNESCAPED_UNICODE);
     }
 }
