@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.64] - 2026-04-28
+
+### Fixed
+- **FlowBuilder & FlowEditor**: Ahora se asegura automáticamente que al menos una pantalla terminal tenga la propiedad `success: true`, cumpliendo con los requisitos de validación de Meta ("At least one terminal screen must have property 'success' set as true").
+
 ## [1.1.63] - 2026-04-28
 
 ### Fixed

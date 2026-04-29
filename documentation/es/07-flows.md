@@ -135,7 +135,7 @@ $flowPhoto = Whatsapp::flow()->builder($account)
         ->title('Photo Picker Example')
         ->isStart(true) // Importante para definir el punto de entrada
         ->terminal(true)
-        ->success(true) // <<< ESTO CORRIGE EL ERROR DE META
+        ->success(true) // Opcional, el paquete lo asegura automáticamente en terminales
         ->data([]) 
         ->element('photo_picker')
             ->type('PhotoPicker')
@@ -178,7 +178,7 @@ $flowDoc = Whatsapp::flow()->builder($account)
         ->title('Document Picker Example')
         ->isStart(true)
         ->terminal(true)
-        ->success(true) // Requerido por Meta para pantallas terminales
+        ->success(true) // El paquete asegura esto automáticamente en pantallas terminales
         ->data([]) 
         ->element('document_picker')
             ->type('DocumentPicker')
@@ -420,7 +420,7 @@ $builder->screen('PRODUCT_SELECTION')
 $builder->screen('CHECKOUT_SCREEN')
     ->title('Confirmación y Pago')
     ->terminal(true) // Indica que es una pantalla final
-    ->success(true)  // Aplica estilos de éxito
+    ->success(true)  // El paquete lo asegura automáticamente, pero puedes definirlo explícitamente
     
     ->data([
         'payment_methods' => [
@@ -594,7 +594,7 @@ $advancedStructure = [
             'id' => 'CHECKOUT_SCREEN',
             'title' => 'Confirmación y Pago',
             'terminal' => true,
-            'success' => true,
+            'success' => true, // El paquete lo asegura automáticamente en terminales si usas setJsonStructure o builder
             'data' => [
                 'payment_methods' => [
                     'type' => 'array',
