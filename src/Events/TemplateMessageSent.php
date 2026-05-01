@@ -15,9 +15,38 @@ class TemplateMessageSent implements ShouldBroadcast
 
     public array $data;
 
-    public function __construct(array $data)
-    {
-        $this->data = $data;
+    /**
+     * Builder que envió el template — expone phone, contact,
+     * templateStructure y buttonParameters al listener.
+     */
+    public /* readonly */ $builder;
+
+    /**
+     * @param array|object $data       Array con datos (modo legacy) o TemplateMessageBuilder (nuevo).
+     * @param array|null   $payload    Payload enviado a Meta.
+     * @param array|null   $response   Respuesta de la API de Meta.
+     */
+    public function __construct(
+        array|object $data,
+        ?array $payload = null,
+        ?array $response = null
+    ) {
+        // Modo legacy: array simple sin builder
+        if (is_array($data)) {
+            $this->data = $data;
+            return;
+        }
+
+        // Nuevo contrato: $data es el TemplateMessageBuilder
+        $this->builder = $data;
+
+        $this->data = [
+            'template'      => $data->template?->name ?? null,
+            'phone_number'  => $data->phoneNumber ?? null,
+            'payload'       => $payload ?? [],
+            'response'      => $response ?? [],
+            'sent_at'       => now()->toIso8601String(),
+        ];
     }
 
     public function broadcastOn(): Channel

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.67] - 2026-04-30
+
+### Added
+- **Sesiones proactivas de Flow al enviar templates**: Al enviar un template con botón FLOW, el paquete ahora crea automáticamente una `WhatsappFlowSession` con `flow_id` correcto antes de que el usuario abra el flow. Esto garantiza que cuando llegue el `nfm_reply`, `findOrCreateSession` encuentre la sesión existente por `flow_token` y las respuestas queden vinculadas al flow correcto en la vista de datos.
+- Nuevo evento `TemplateMessageSent` despachado al final de `TemplateMessageBuilder::sendMessage()` tras respuesta exitosa de Meta.
+- Nuevo listener interno `CreateFlowSessionOnTemplateSent` que detecta botones FLOW en el payload y llama a `FlowSessionService::createProactive()` automáticamente.
+- Métodos helper públicos en `TemplateMessageBuilder`: `getPhone()`, `getContact()`, `getRecipientPhone()`, `getFlowButtons()`, `getButtonToken()`.
+- Constructor de `TemplateMessageSent` actualizado para aceptar el builder + payload + response (backward compatible con el modo array simple).
+
+### Changed
+- `TemplateMessageSent` ahora soporta dos modos de construcción: array simple (legacy) y builder + payload + response (nuevo).
+
 ## [1.1.66] - 2026-04-29
 
 ### Added

@@ -18,6 +18,7 @@ use ScriptDevelop\WhatsappManager\WhatsappApi\Endpoints;
 use ScriptDevelop\WhatsappManager\Enums\MessageStatus;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Event;
 use ScriptDevelop\WhatsappManager\Support\WhatsappModelResolver;
 
 class TemplateMessageBuilder
@@ -464,6 +465,13 @@ class TemplateMessageBuilder
         $actionData = [
             'flow_token' => $flowToken,
         ];
+
+        // ── Crear sesión proactiva de flow ────────────────────────────
+        // Si el token es placeholder ("unused") y tenemos phone + contact,
+        // generamos un token único y creamos la sesión con flow_id correcto.
+        $this->maybeCreateProactiveFlowSession($button, $flowToken, $actionData);
+        // ────────────────────────────────────────────────────────────────
+
         if (!empty($flowActionData)) {
             $actionData['flow_action_data'] = $flowActionData;
         }
@@ -476,6 +484,60 @@ class TemplateMessageBuilder
         ];
 
         return $this;
+    }
+
+    /**
+     * Si el flow_token es un placeholder y tenemos contexto suficiente,
+     * genera un token único y crea la sesión proactiva con flow_id correcto.
+     *
+     * Esto garantiza que cuando llegue el nfm_reply, findOrCreateSession
+     * encuentre la sesión por el token único y el flow_id ya esté poblado.
+     */
+    protected function maybeCreateProactiveFlowSession(array $button, string &$flowToken, array &$actionData): void
+    {
+        $waFlowId = $button['flow_id'] ?? null;
+        if (!$waFlowId) {
+            return;
+        }
+
+        // Solo intervenimos si el token es un placeholder
+        $isPlaceholder = in_array($flowToken, ['unused', ''], true);
+        if (!$isPlaceholder && !empty($flowToken)) {
+            return;
+        }
+
+        try {
+            $flow = \ScriptDevelop\WhatsappManager\Models\WhatsappFlow::where('wa_flow_id', $waFlowId)->first();
+            if (!$flow) {
+                return;
+            }
+
+            // Generar token único por destinatario
+            $uniqueToken = hash('sha256', $flow->flow_id . $this->phoneNumber . now()->timestamp);
+
+            $sessionService = app(\ScriptDevelop\WhatsappManager\Services\Flows\FlowSessionService::class);
+            $sessionService->createProactive(
+                flow:        $flow,
+                phoneNumber: $this->phone,
+                contact:     $this->contact,
+                sendMethod:  'template',
+                flowToken:   $uniqueToken
+            );
+
+            // Actualizar el token en el actionData para que el template
+            // se envíe con el token único (el mismo que la sesión)
+            $flowToken = $uniqueToken;
+            $actionData['flow_token'] = $uniqueToken;
+
+            Log::channel('whatsapp')->info('[TemplateMessageBuilder] Sesión proactiva creada', [
+                'flow_id'     => $flow->flow_id,
+                'wa_flow_id'  => $waFlowId,
+                'flow_token'  => $uniqueToken,
+                'recipient'   => $this->phoneNumber,
+            ]);
+        } catch (\Throwable $e) {
+            Log::channel('whatsapp')->warning('[TemplateMessageBuilder] Error creando sesión proactiva: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -1055,6 +1117,13 @@ class TemplateMessageBuilder
 
         Log::channel('whatsapp')->info('Mensaje enviado exitosamente.', ['response' => $response]);
 
+        // Despachar evento para que listeners como CreateFlowSessionOnTemplateSent
+        // puedan crear sesiones proactivas de flow si el template tiene botones FLOW.
+        $eventClass = config('whatsapp.events.template.sent');
+        if ($eventClass && class_exists($eventClass)) {
+            Event::dispatch(new $eventClass($this, $payload, $response));
+        }
+
         return $response;
     }
 
@@ -1063,5 +1132,68 @@ class TemplateMessageBuilder
         if (empty($this->templateStructure)) {
             throw new InvalidArgumentException("Debes establecer la plantilla usando ->usingTemplate(...) antes de agregar componentes.");
         }
+    }
+
+    // ── Helpers públicos para listeners ──────────────────────────────────
+
+    /**
+     * Phone number model usado para enviar el template.
+     */
+    public function getPhone(): Model
+    {
+        return $this->phone;
+    }
+
+    /**
+     * Contacto destinatario (puede ser null si se envió sin contacto).
+     */
+    public function getContact(): ?Model
+    {
+        return $this->contact;
+    }
+
+    /**
+     * Teléfono del destinatario en formato internacional (E.164).
+     */
+    public function getRecipientPhone(): string
+    {
+        return $this->phoneNumber;
+    }
+
+    /**
+     * Retorna los botones FLOW del template con su índice original.
+     *
+     * @return array<int, array{index: int, flow_id: string, text: string}>
+     */
+    public function getFlowButtons(): array
+    {
+        $buttons = $this->templateStructure['by_type']['BUTTONS']['buttons'] ?? [];
+
+        $flowButtons = [];
+        foreach ($buttons as $index => $button) {
+            if (strtoupper($button['type'] ?? '') === 'FLOW' && !empty($button['flow_id'])) {
+                $flowButtons[] = [
+                    'index'   => $index,
+                    'flow_id' => $button['flow_id'],
+                    'text'    => $button['text'] ?? '',
+                ];
+            }
+        }
+
+        return $flowButtons;
+    }
+
+    /**
+     * Extrae el flow_token configurado para un botón FLOW específico.
+     * Retorna null si no se configuró ninguno.
+     */
+    public function getButtonToken(int $index): ?string
+    {
+        $params = $this->buttonParameters[$index] ?? null;
+        if (!$params || !isset($params[0]['action']['flow_token'])) {
+            return null;
+        }
+
+        return $params[0]['action']['flow_token'];
     }
 }

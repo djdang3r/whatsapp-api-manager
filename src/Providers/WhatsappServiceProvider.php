@@ -16,6 +16,9 @@ use ScriptDevelop\WhatsappManager\Services\TemplateService;
 use ScriptDevelop\WhatsappManager\Services\FlowService;
 use ScriptDevelop\WhatsappManager\Services\Flows\FlowMediaService;
 use ScriptDevelop\WhatsappManager\Services\Flows\FlowCryptoService;
+use ScriptDevelop\WhatsappManager\Events\TemplateMessageSent;
+use ScriptDevelop\WhatsappManager\Listeners\CreateFlowSessionOnTemplateSent;
+use Illuminate\Support\Facades\Event;
 
 class WhatsappServiceProvider extends ServiceProvider
 {
@@ -231,6 +234,9 @@ class WhatsappServiceProvider extends ServiceProvider
                 });
             }
         }
+
+        // ── Registrar listeners internos del paquete ──────────────────────
+        Event::listen(TemplateMessageSent::class, CreateFlowSessionOnTemplateSent::class);
     }
 
     /**
