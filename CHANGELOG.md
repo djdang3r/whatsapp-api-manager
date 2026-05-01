@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.68] - 2026-04-30
+
+### Fixed
+- **Evento `TemplateMessageSent` envuelto en try/catch**: Un fallo en el listener `CreateFlowSessionOnTemplateSent` (u otro listener registrado) ya no rompe la respuesta HTTP al frontend. El mensaje ya fue enviado a Meta — el error solo se loguea como warning.
+
 ## [1.1.67] - 2026-04-30
 
 ### Added

@@ -1119,9 +1119,17 @@ class TemplateMessageBuilder
 
         // Despachar evento para que listeners como CreateFlowSessionOnTemplateSent
         // puedan crear sesiones proactivas de flow si el template tiene botones FLOW.
-        $eventClass = config('whatsapp.events.template.sent');
-        if ($eventClass && class_exists($eventClass)) {
-            Event::dispatch(new $eventClass($this, $payload, $response));
+        // Envuelto en try/catch para que un fallo en el listener NO rompa
+        // la respuesta HTTP al frontend (el mensaje ya fue enviado a Meta).
+        try {
+            $eventClass = config('whatsapp.events.template.sent');
+            if ($eventClass && class_exists($eventClass)) {
+                Event::dispatch(new $eventClass($this, $payload, $response));
+            }
+        } catch (\Throwable $e) {
+            Log::channel('whatsapp')->warning(
+                '[TemplateMessageBuilder] Error despachando TemplateMessageSent: ' . $e->getMessage()
+            );
         }
 
         return $response;
