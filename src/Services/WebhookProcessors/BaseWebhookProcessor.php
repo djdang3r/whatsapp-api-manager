@@ -18,6 +18,7 @@ use ScriptDevelop\WhatsappManager\Services\MessageDispatcherService;
 use ScriptDevelop\WhatsappManager\Services\TemplateService;
 use ScriptDevelop\WhatsappManager\Services\Flows\FlowCryptoService;
 use ScriptDevelop\WhatsappManager\Events\FlowStatusUpdated;
+use ScriptDevelop\WhatsappManager\Events\OrderMessageReceived;
 use ScriptDevelop\WhatsappManager\Events\BusinessUsernameUpdated;
 use ScriptDevelop\WhatsappManager\Events\UserIdUpdated;
 use ScriptDevelop\WhatsappManager\Services\Flows\FlowMediaService;
@@ -332,6 +333,13 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             $messageRecord = $this->processButtonMessage($message, $contactRecord, $whatsappPhone);
 
             $this->fireButtonMessageReceived($contactRecord, $messageRecord);
+        }
+
+        // Manejar mensajes de pedido (order) del carrito de WhatsApp
+        if ($messageType === 'order') {
+            $messageRecord = $this->processOrderMessage($message, $contactRecord, $whatsappPhone);
+
+            $this->fireOrderMessageReceived($contactRecord, $messageRecord);
         }
 
         // Manejar mensajes de media
@@ -821,6 +829,46 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             'message_id' => $messageRecord->message_id,
             'wa_id' => $message['id'],
             'content' => $textContent,
+        ]);
+
+        return $messageRecord;
+    }
+
+    protected function processOrderMessage(array $message, Model $contact, Model $whatsappPhone): ?Model
+    {
+        $orderData = $message['order'] ?? [];
+
+        if (empty($orderData)) {
+            Log::channel('whatsapp')->warning('Pedido sin datos de orden.', $message);
+            return null;
+        }
+
+        $textContent = 'Pedido recibido — Productos: ' . count($orderData['product_items'] ?? []);
+
+        $messageRecord = WhatsappModelResolver::message()->firstOrCreate(
+            ['wa_id' => $message['id']],
+            [
+                'whatsapp_phone_id' => $whatsappPhone->phone_number_id,
+                'contact_id'        => $contact->contact_id,
+                'conversation_id'   => null,
+                'messaging_product' => $message['messaging_product'] ?? 'whatsapp',
+                'message_from'      => isset($message['from']) ? preg_replace('/[\D+]/', '', $message['from']) : null,
+                'from_bsuid'        => $message['from_user_id'] ?? null,
+                'from_parent_bsuid' => $message['from_parent_user_id'] ?? null,
+                'message_to'        => preg_replace('/[\D+]/', '', $whatsappPhone->display_phone_number),
+                'message_type'      => 'order',
+                'message_content'   => $textContent,
+                'json_content'      => json_encode($message),
+                'status'            => 'received',
+                'timestamp'         => $message['timestamp'] ?? null,
+            ]
+        );
+
+        Log::channel('whatsapp')->info('Pedido (order) procesado y guardado.', [
+            'message_id'  => $messageRecord->message_id,
+            'wa_id'       => $message['id'],
+            'catalog_id'  => $orderData['catalog_id'] ?? null,
+            'items_count' => count($orderData['product_items'] ?? []),
         ]);
 
         return $messageRecord;
@@ -4553,6 +4601,23 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         } else {
             Log::channel('whatsapp')->warning('⚠️ [BUSINESS_CAPABILITY] No messaging limit found in webhook', $value);
         }
+    }
+
+    protected function fireOrderMessageReceived($contact, $messageRecord): void
+    {
+        $orderData = json_decode($messageRecord->json_content ?? '{}', true)['order'] ?? [];
+
+        event(new OrderMessageReceived([
+            'message_id'     => $messageRecord->message_id,
+            'wa_id'          => $messageRecord->wa_id,
+            'contact_wa_id'  => $contact->wa_id,
+            'contact_name'   => $contact->profile_name ?? $contact->name ?? null,
+            'whatsapp_phone_id' => $messageRecord->whatsapp_phone_id,
+            'catalog_id'     => $orderData['catalog_id'] ?? null,
+            'order_text'     => $orderData['text'] ?? null,
+            'product_items'  => $orderData['product_items'] ?? [],
+            'timestamp'      => $messageRecord->timestamp,
+        ]));
     }
 
     protected function fireFlowStatusUpdated(array $payload)
