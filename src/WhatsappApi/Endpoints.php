@@ -29,6 +29,9 @@ class Endpoints
     const UNBLOCK_USERS = '{phone_number_id}/block_users';
     const LIST_BLOCKED_USERS = '{phone_number_id}/block_users';
 
+    // Commerce Settings (Catalog visibility)
+    const WHATSAPP_COMMERCE_SETTINGS = '{phone_number_id}/whatsapp_commerce_settings';
+
     // Username Endpoints (disponibles desde 2026)
     const BUSINESS_USERNAME = '{phone_number_id}/username';
     const BUSINESS_USERNAME_SUGGESTIONS = '{phone_number_id}/username_suggestions';

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.74] - 2026-05-11
+
+### Added
+- `WhatsappService::setCatalogVisibility()`: configura la visibilidad del ícono del catálogo en el encabezado del chat de WhatsApp via `POST /{phone_number_id}/whatsapp_commerce_settings` con parámetro `is_catalog_visible`.
+- `WhatsappService::getCatalogSettings()`: obtiene la configuración actual de comercio (`is_catalog_visible`, `is_cart_enabled`) via `GET /{phone_number_id}/whatsapp_commerce_settings`.
+- Endpoint `WHATSAPP_COMMERCE_SETTINGS` en `WhatsappApi\Endpoints`.
+
 ## [1.1.72] - 2026-05-06
 
 ### Fixed

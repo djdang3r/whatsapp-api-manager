@@ -913,6 +913,76 @@ class WhatsappService
     }
 
     /**
+     * Configura la visibilidad del catálogo en el encabezado del chat para un número de teléfono.
+     *
+     * POST /{phone_number_id}/whatsapp_commerce_settings
+     *
+     * @param string $phoneNumberId ID de la API del número de teléfono (api_phone_number_id)
+     * @param bool   $isCatalogVisible true para mostrar el ícono del catálogo, false para ocultarlo
+     * @return array Respuesta de la API ({ "success": true })
+     */
+    public function setCatalogVisibility(string $phoneNumberId, bool $isCatalogVisible): array
+    {
+        $this->ensureAccountIsSet();
+
+        $endpoint = Endpoints::build(Endpoints::WHATSAPP_COMMERCE_SETTINGS, [
+            'phone_number_id' => $phoneNumberId,
+        ]);
+
+        Log::channel('whatsapp')->debug('Configurando visibilidad del catálogo', [
+            'phone_number_id' => $phoneNumberId,
+            'is_catalog_visible' => $isCatalogVisible,
+        ]);
+
+        $response = $this->apiClient->request(
+            'POST',
+            $endpoint,
+            [],
+            ['is_catalog_visible' => $isCatalogVisible],
+            [],
+            $this->getAuthHeaders()
+        );
+
+        Log::channel('whatsapp')->debug('Respuesta de setCatalogVisibility:', $response);
+
+        return $response;
+    }
+
+    /**
+     * Obtiene la configuración actual de comercio (catalog visibility) para un número de teléfono.
+     *
+     * GET /{phone_number_id}/whatsapp_commerce_settings
+     *
+     * @param string $phoneNumberId ID de la API del número de teléfono (api_phone_number_id)
+     * @return array Respuesta de la API con la configuración actual
+     */
+    public function getCatalogSettings(string $phoneNumberId): array
+    {
+        $this->ensureAccountIsSet();
+
+        $endpoint = Endpoints::build(Endpoints::WHATSAPP_COMMERCE_SETTINGS, [
+            'phone_number_id' => $phoneNumberId,
+        ]);
+
+        Log::channel('whatsapp')->debug('Obteniendo configuración de comercio', [
+            'phone_number_id' => $phoneNumberId,
+        ]);
+
+        $response = $this->apiClient->request(
+            'GET',
+            $endpoint,
+            [],
+            null,
+            [],
+            $this->getAuthHeaders()
+        );
+
+        Log::channel('whatsapp')->debug('Respuesta de getCatalogSettings:', $response);
+
+        return $response;
+    }
+
+    /**
      * Crea una sesión de carga para la foto de perfil de empresa.
      * Retorna el ID de sesión a usar en el upload.
      */

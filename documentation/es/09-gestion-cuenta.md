@@ -45,6 +45,10 @@ Esta sección cubre toda la funcionalidad de administración de tu cuenta de Wha
   - [8.3 Eliminar username](#83-eliminar-username)
   - [8.4 Obtener sugerencias de username](#84-obtener-sugerencias-de-username)
 
+- [9. Configuración de Comercio (Catálogo en Chat)](#9-configuración-de-comercio-catálogo-en-chat)
+  - [9.1 Activar/desactivar visibilidad del catálogo](#91-activardesactivar-visibilidad-del-catálogo)
+  - [9.2 Consultar configuración actual](#92-consultar-configuración-actual)
+
 ---
 
 ## Acceso a los servicios
@@ -726,6 +730,55 @@ foreach ($usernames as $username) {
     echo $username . "\n";
 }
 ```
+
+---
+
+## 9. Configuración de Comercio (Catálogo en Chat)
+
+Controla si el ícono del catálogo aparece en el encabezado del chat de WhatsApp para un número de teléfono. Cuando está activado, los clientes pueden explorar el catálogo de productos directamente desde el chat.
+
+### 9.1 Activar/desactivar visibilidad del catálogo
+
+Usa `setCatalogVisibility()` para mostrar u ocultar el ícono del catálogo en el chat de WhatsApp.
+
+```php
+$response = Whatsapp::phone()
+    ->forAccount($whatsappBusinessAccountId)
+    ->setCatalogVisibility($phoneNumberId, true);  // true = visible, false = oculto
+
+// Respuesta: ['success' => true]
+```
+
+**Endpoint:** `POST /{phone_number_id}/whatsapp_commerce_settings`
+
+**Parámetros:**
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `is_catalog_visible` | `boolean` | `true` para mostrar el ícono, `false` para ocultarlo |
+
+### 9.2 Consultar configuración actual
+
+Usa `getCatalogSettings()` para obtener el estado actual de la configuración de comercio, incluyendo si el catálogo está visible y si el carrito de compras está habilitado.
+
+```php
+$settings = Whatsapp::phone()
+    ->forAccount($whatsappBusinessAccountId)
+    ->getCatalogSettings($phoneNumberId);
+
+// Estructura de respuesta:
+// [
+//   'data' => [
+//     [
+//       'is_catalog_visible' => true,
+//       'is_cart_enabled'    => false,
+//     ]
+//   ]
+// ]
+```
+
+**Endpoint:** `GET /{phone_number_id}/whatsapp_commerce_settings`
+
+> **Nota:** Esta configuración solo tiene efecto si el catálogo ya está vinculado al número de WhatsApp. Vincular un catálogo a una WABA se hace desde el paquete `meta-catalog-manager`.
 
 ---
 
