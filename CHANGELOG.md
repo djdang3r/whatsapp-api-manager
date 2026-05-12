@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.75] - 2026-05-11
+
+### Fixed
+- `TemplateBuilder::save()`: removed `parameter_format` from POST body when creating templates via Meta API. This field is read-only (returned in GET responses) and caused `Invalid parameter` error 400 on API v25.0 for AUTHENTICATION templates.
+
 ## [1.1.74] - 2026-05-11
 
 ### Added

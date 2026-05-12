@@ -1045,7 +1045,8 @@ class TemplateBuilder
                 'Content-Type' => 'application/json',
             ];
 
-            $this->templateData['parameter_format'] = $this->parameterFormat;
+            $postData = $this->templateData;
+            unset($postData['parameter_format']);
 
             // Registrar los datos antes de codificar en JSON
             Log::channel('whatsapp')->info('Datos de la plantilla antes de codificar en JSON.', [
@@ -1053,10 +1054,10 @@ class TemplateBuilder
             ]);
 
             // Codificar los datos en JSON
-            $jsonData = json_encode($this->templateData, JSON_UNESCAPED_UNICODE);
+            $jsonData = json_encode($postData, JSON_UNESCAPED_UNICODE);
             if ($jsonData === false) {
                 $error = json_last_error_msg();
-                Log::channel('whatsapp')->error('Error al codificar JSON.', ['error' => $error, 'data' => $this->templateData]);
+                Log::channel('whatsapp')->error('Error al codificar JSON.', ['error' => $error, 'data' => $postData]);
                 throw new \Exception('Error al codificar JSON: ' . $error);
             }
 
@@ -1065,7 +1066,7 @@ class TemplateBuilder
                 'POST',
                 $endpoint,
                 [],
-                $this->templateData,
+                $postData,
                 [],
                 $headers
             );
