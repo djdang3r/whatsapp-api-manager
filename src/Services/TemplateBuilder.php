@@ -74,21 +74,29 @@ class TemplateBuilder
         }
 
         $this->templateData['name'] = $name;
-        return $this;
+return $this;
     }
 
-    public function setParameterFormat(string $format): self
+    public function addOtpButton(string $text = 'Copy code', string $otpType = 'COPY_CODE'): self
     {
-        $validFormats = ['POSITIONAL', 'NAMED'];
-        $format = strtoupper($format);
+        $button = [
+            'type' => 'OTP',
+            'otp_type' => $otpType,
+            'text' => $text,
+        ];
 
-        if (!in_array($format, $validFormats)) {
-            throw new InvalidArgumentException(
-                "Formato de parámetro inválido. Use: " . implode(', ', $validFormats)
-            );
+        if (! $this->componentExists('BUTTONS')) {
+            $this->templateData['components'][] = [
+                'type' => 'BUTTONS',
+                'buttons' => [$button],
+            ];
+        } else {
+            $index = array_search('BUTTONS', array_column($this->templateData['components'], 'type'));
+            $this->templateData['components'][$index]['buttons'][] = $button;
         }
 
-        $this->parameterFormat = $format;
+        $this->buttonCount++;
+
         return $this;
     }
 

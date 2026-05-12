@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.75] - 2026-05-11
+## [1.1.76] - 2026-05-11
+
+### Added
+- `TemplateBuilder::addOtpButton()`: adds an OTP button (COPY_CODE or ONE_TAP) for AUTHENTICATION templates. Required by Meta API v25.0 for authentication template creation.
 
 ### Fixed
-- `TemplateBuilder::save()`: removed `parameter_format` from POST body when creating templates via Meta API. This field is read-only (returned in GET responses) and caused `Invalid parameter` error 400 on API v25.0 for AUTHENTICATION templates.
+- `TemplateBuilder::save()`: removed `parameter_format` from POST body when creating templates (read-only field in v25.0).
 
 ## [1.1.74] - 2026-05-11
 
