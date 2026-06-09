@@ -63,34 +63,50 @@ class FlowCryptoService
 
     /**
      * Desencripta la petición entrante de WhatsApp Flows.
+     *
+     * Meta requiere RSA-OAEP con SHA-256 para el digest. PHP 8.5+ lo soporta
+     * nativamente vía $digest_algo. En versiones anteriores se usa phpseclib3.
      */
     public function decryptRequest(string $encryptedAesKey, string $encryptedFlowData, string $initialVector): array
     {
         $this->ensureKeyLoaded();
 
-        // 1. Desencriptar la llave AES usando RSA con la llave privada
-        $decryptedAesKey    = null;
-        $privateKeyResource = openssl_pkey_get_private($this->privateKey);
+        $encodedBinary = base64_decode($encryptedAesKey);
+        $decryptedAesKey = null;
 
-        if (!openssl_private_decrypt(base64_decode($encryptedAesKey), $decryptedAesKey, $privateKeyResource, OPENSSL_PKCS1_OAEP_PADDING)) {
-            throw new Exception('Fallo al desencriptar la llave AES: ' . openssl_error_string());
+        if (version_compare(PHP_VERSION, '8.5.0', '>=')) {
+            $keyResource = openssl_pkey_get_private($this->privateKey);
+            if (! openssl_private_decrypt($encodedBinary, $decryptedAesKey, $keyResource, OPENSSL_PKCS1_OAEP_PADDING, 'sha256')) {
+                throw new Exception('Fallo al desencriptar la llave AES: ' . openssl_error_string());
+            }
+        } elseif (class_exists('\\phpseclib3\\Crypt\\PublicKeyLoader')) {
+            try {
+                $key = \phpseclib3\Crypt\PublicKeyLoader::load($this->privateKey)
+                    ->withHash('sha256')
+                    ->withMGFHash('sha256');
+                $result = $key->decrypt($encodedBinary);
+                if ($result === null || $result === false || $result === '') {
+                    throw new Exception('phpseclib3: RSA-OAEP SHA-256 decryption failed');
+                }
+                $decryptedAesKey = $result;
+            } catch (\Throwable $e) {
+                throw new Exception('Fallo al desencriptar la llave AES (phpseclib3): ' . $e->getMessage());
+            }
+        } else {
+            $keyResource = openssl_pkey_get_private($this->privateKey);
+            if (! openssl_private_decrypt($encodedBinary, $decryptedAesKey, $keyResource, OPENSSL_PKCS1_OAEP_PADDING)) {
+                throw new Exception('Fallo al desencriptar la llave AES: ' . openssl_error_string());
+            }
         }
 
-        // 2. Desencriptar los datos del flujo usando AES-128-GCM
         $encryptedDataBinary = base64_decode($encryptedFlowData);
-        $iv                  = base64_decode($initialVector);
-
-        // El tag de autenticación son los últimos 16 bytes en AES-GCM
-        $tag        = substr($encryptedDataBinary, -16);
+        $iv = base64_decode($initialVector);
+        $tag = substr($encryptedDataBinary, -16);
         $ciphertext = substr($encryptedDataBinary, 0, -16);
 
         $decryptedData = openssl_decrypt(
-            $ciphertext,
-            'aes-128-gcm',
-            $decryptedAesKey,
-            OPENSSL_RAW_DATA,
-            $iv,
-            $tag
+            $ciphertext, 'aes-128-gcm', $decryptedAesKey,
+            OPENSSL_RAW_DATA, $iv, $tag
         );
 
         if ($decryptedData === false) {
@@ -102,22 +118,27 @@ class FlowCryptoService
 
     /**
      * Encripta la respuesta para enviarla de vuelta a WhatsApp.
+     *
+     * Invierte todos los bits del IV antes de encriptar, como requiere Meta
+     * en su implementación de WhatsApp Flows.
      */
     public function encryptResponse(array $data, string $aesKey, string $iv): string
     {
         $plainText = json_encode($data);
-        $tag       = null;
+        $tag = null;
+
+        $decodedIv = base64_decode($iv);
+        $flippedIv = '';
+        $len = strlen($decodedIv);
+        for ($i = 0; $i < $len; $i++) {
+            $flippedIv .= chr(ord($decodedIv[$i]) ^ 0xFF);
+        }
 
         $ciphertext = openssl_encrypt(
-            $plainText,
-            'aes-128-gcm',
-            base64_decode($aesKey),
-            OPENSSL_RAW_DATA,
-            base64_decode($iv),
-            $tag
+            $plainText, 'aes-128-gcm', base64_decode($aesKey),
+            OPENSSL_RAW_DATA, $flippedIv, $tag
         );
 
-        // La respuesta debe ser base64(ciphertext + tag)
         return base64_encode($ciphertext . $tag);
     }
 }

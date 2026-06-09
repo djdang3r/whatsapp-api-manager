@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.77] - 2026-06-09
+
+### Fixed
+- `FlowCryptoService`: RSA-OAEP ahora usa SHA-256 para el digest (requerido por Meta). En PHP 8.5+ se usa el parámetro nativo `$digest_algo='sha256'`. En versiones anteriores se usa phpseclib3 como fallback.
+- `FlowCryptoService::encryptResponse()`: invierte todos los bits del IV antes de encriptar (requerido por Meta WhatsApp Flows).
+
 ## [1.1.76] - 2026-05-11
 
 ### Added
