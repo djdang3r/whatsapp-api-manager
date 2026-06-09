@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.78] - 2026-06-09
+
+### Added
+- `FlowCryptoService::getDecryptedAesKey()`: expone la llave AES desencriptada para que el caller pueda usarla en `encryptResponse()`.
+
+
 ## [1.1.77] - 2026-06-09
 
 ### Fixed

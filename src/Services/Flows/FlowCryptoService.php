@@ -8,30 +8,19 @@ use Exception;
 class FlowCryptoService
 {
     protected ?string $privateKey = null;
+    protected ?string $decryptedAesKey = null;
 
-    /**
-     * Constructor vacío — la clave se carga explícitamente con loadFromPath() o loadForAccount().
-     * El service provider NO debe registrar esto como singleton con key pre-cargada.
-     */
     public function __construct() {}
 
-    /**
-     * Carga la clave privada desde un path explícito.
-     */
     public function loadFromPath(string $path): static
     {
         if (!File::exists($path)) {
             throw new Exception("No se encontró la llave privada en: {$path}");
         }
-
         $this->privateKey = File::get($path);
         return $this;
     }
 
-    /**
-     * Carga la clave privada para una cuenta específica.
-     * Path: storage/app/whatsapp/flows/keys/{accountId}/private.pem
-     */
     public function loadForAccount(string $accountId): static
     {
         return $this->loadFromPath(
@@ -39,34 +28,26 @@ class FlowCryptoService
         );
     }
 
-    /**
-     * Verifica que haya una clave cargada. Si no, intenta el path legacy
-     * (storage/app/public/whatsapp/flows/keys/private.pem) para backwards compatibility.
-     */
+    public function getDecryptedAesKey(): ?string
+    {
+        return $this->decryptedAesKey;
+    }
+
     protected function ensureKeyLoaded(): void
     {
         if ($this->privateKey !== null) {
             return;
         }
-
         $legacyPath = storage_path('app/public/whatsapp/flows/keys/private.pem');
-
         if (File::exists($legacyPath)) {
             $this->privateKey = File::get($legacyPath);
             return;
         }
-
         throw new Exception(
             'No hay clave privada cargada. Llamá a loadFromPath() o loadForAccount() antes de desencriptar.'
         );
     }
 
-    /**
-     * Desencripta la petición entrante de WhatsApp Flows.
-     *
-     * Meta requiere RSA-OAEP con SHA-256 para el digest. PHP 8.5+ lo soporta
-     * nativamente vía $digest_algo. En versiones anteriores se usa phpseclib3.
-     */
     public function decryptRequest(string $encryptedAesKey, string $encryptedFlowData, string $initialVector): array
     {
         $this->ensureKeyLoaded();
@@ -99,6 +80,8 @@ class FlowCryptoService
             }
         }
 
+        $this->decryptedAesKey = base64_encode($decryptedAesKey);
+
         $encryptedDataBinary = base64_decode($encryptedFlowData);
         $iv = base64_decode($initialVector);
         $tag = substr($encryptedDataBinary, -16);
@@ -116,12 +99,6 @@ class FlowCryptoService
         return json_decode($decryptedData, true);
     }
 
-    /**
-     * Encripta la respuesta para enviarla de vuelta a WhatsApp.
-     *
-     * Invierte todos los bits del IV antes de encriptar, como requiere Meta
-     * en su implementación de WhatsApp Flows.
-     */
     public function encryptResponse(array $data, string $aesKey, string $iv): string
     {
         $plainText = json_encode($data);
