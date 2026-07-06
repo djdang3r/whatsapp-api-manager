@@ -728,6 +728,130 @@ Gracias por tu apoyo 💙
         ->send();
     ```
 
+## Plantillas de Autenticación (OTP)
+
+Las plantillas de autenticación se usan para enviar contraseñas de un solo uso o códigos de verificación mediante WhatsApp.
+A diferencia de las plantillas de marketing y utilidad, las plantillas de autenticación tienen un **texto de cuerpo fijo** predefinido por WhatsApp
+(`"Tu código de verificación es {{1}}"`) y usan una estructura de payload diferente en la API.
+
+### Diferencias Clave con las Plantillas Estándar
+
+| Característica | Plantillas Estándar | Plantillas de Autenticación |
+|---------------|--------------------|---------------------------|
+| Texto del cuerpo | Personalizable (`text`) | Fijo por WhatsApp: `"Tu código de verificación es {{1}}"` |
+| Configuración del cuerpo | `addBody($text)` | `addAuthenticationBody(bool $addSecurityReco)` |
+| Footer | `addFooter($text)` | `addAuthenticationFooter(?int $minutes)` |
+| Botones | `QUICK_REPLY`, `URL`, `PHONE_NUMBER` | `OTP` con tipos: `COPY_CODE`, `ONE_TAP`, `ZERO_TAP` |
+| Método para botones | `addButton($type, $text)` | `addOtpButton($text, $otpType, ...)` |
+
+### Crear Plantillas de Autenticación
+
+```php
+use ScriptDevelop\WhatsappManager\Facades\Whatsapp;
+use ScriptDevelop\WhatsappManager\Models\WhatsappBusinessAccount;
+
+$account = WhatsappBusinessAccount::find($accountId);
+
+// EJEMPLO 1: Botón Copiar Código (el más simple)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('codigo_verificacion')
+    ->setLanguage('es_CO')
+    ->addAuthenticationBody(true)            // Incluir recomendación de seguridad
+    ->addAuthenticationFooter(10)             // El código caduca en 10 minutos
+    ->addOtpButton('Copiar código', 'COPY_CODE')
+    ->save();
+
+// EJEMPLO 2: Botón Autocompletar con un toque (solo Android)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('auth_un_toque')
+    ->setLanguage('es_CO')
+    ->addAuthenticationBody(true)
+    ->addAuthenticationFooter(5)
+    ->addOtpButton(
+        text: 'Autocompletar',
+        otpType: 'ONE_TAP',
+        autofillText: 'Autocompletar',
+        packageName: 'com.ejemplo.miapp',
+        signatureHash: 'K8a/AINcGX7'
+    )
+    ->save();
+
+// EJEMPLO 3: Un toque con múltiples apps soportadas (máx 5)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('auth_multi_app')
+    ->setLanguage('es_CO')
+    ->addAuthenticationBody(false)           // Sin recomendación de seguridad
+    ->addOtpButton(
+        text: 'Autocompletar',
+        otpType: 'ONE_TAP',
+        autofillText: 'Autocompletar',
+        supportedApps: [
+            ['package_name' => 'com.ejemplo.app1', 'signature_hash' => 'K8a/AINcGX7'],
+            ['package_name' => 'com.ejemplo.app2', 'signature_hash' => 'bB9c/DEFhY8z'],
+        ]
+    )
+    ->save();
+
+// EJEMPLO 4: Sin toque (Zero-Tap, sin interacción del usuario, solo Android)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('auth_sin_toque')
+    ->setLanguage('es_CO')
+    ->addAuthenticationBody(true)
+    ->addAuthenticationFooter(10)
+    ->addOtpButton(
+        text: 'Copiar código',
+        otpType: 'ZERO_TAP',
+        autofillText: 'Autocompletar',
+        supportedApps: [
+            ['package_name' => 'com.ejemplo.miapp', 'signature_hash' => 'K8a/AINcGX7'],
+        ],
+        zeroTapTermsAccepted: true           // OBLIGATORIO para ZERO_TAP
+    )
+    ->save();
+
+// EJEMPLO 5: Plantilla de autenticación mínima (sin footer, sin recomendación de seguridad)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('auth_simple')
+    ->setLanguage('es_CO')
+    ->addAuthenticationBody(false)
+    ->addOtpButton('Copiar código', 'COPY_CODE')
+    ->save();
+```
+
+### Tipos de Botón OTP
+
+| Tipo | Descripción | ¿Requiere `supported_apps`? | ¿Requiere `zero_tap_terms_accepted`? |
+|------|-------------|---------------------------|-------------------------------------|
+| `COPY_CODE` | Muestra un botón "Copiar código". El usuario copia el código al portapapeles y lo pega en tu app. | No | No |
+| `ONE_TAP` | Muestra un botón "Autocompletar". Al tocarlo abre tu app con el código. Solo Android. En iOS muestra COPY_CODE. | Sí | No |
+| `ZERO_TAP` | El código se entrega automáticamente a tu app sin interacción del usuario. Solo Android. | Sí | **Sí** |
+
+### Parámetros de `addOtpButton()`
+
+```php
+addOtpButton(
+    string $text = 'Copy code',                      // Texto del botón (máx 25 caracteres)
+    string $otpType = 'COPY_CODE',                   // COPY_CODE, ONE_TAP, ZERO_TAP
+    ?string $autofillText = null,                    // Texto personalizado del botón autocompletar (máx 25 chars)
+    ?string $packageName = null,                     // Nombre del paquete Android (ONE_TAP/ZERO_TAP)
+    ?string $signatureHash = null,                   // Hash de firma de la app — 11 caracteres (ONE_TAP/ZERO_TAP)
+    array $supportedApps = [],                       // Máx 5: [['package_name' => '...', 'signature_hash' => '...']]
+    bool $zeroTapTermsAccepted = false               // OBLIGATORIO para ZERO_TAP
+): self
+```
+
+> **Notas Importantes:**
+> - Las plantillas de autenticación NO admiten headers (sin imágenes, videos ni texto en el encabezado).
+> - El texto del cuerpo siempre es fijo: `"Tu código de verificación es {{1}}"` (localizado según el idioma).
+> - Formato de `package_name`: al menos dos segmentos separados por puntos, solo alfanumérico + guion bajo.
+> - Formato de `signature_hash`: exactamente 11 caracteres, alfanumérico + `/+` `=`.
+> - Máximo 5 aplicaciones en `supported_apps`.
+
 ### Notas Importantes sobre Plantillas con Multimedia
 
 - **URLs públicas:** Las imágenes, videos y documentos deben estar alojados en URLs públicas accesibles por la API de WhatsApp.

@@ -632,6 +632,132 @@ Thank you for your support 💙
 
 ---
 
+## Authentication Templates (OTP)
+
+Authentication templates are used to send one-time passwords or verification codes via WhatsApp.
+Unlike marketing and utility templates, authentication templates have a **fixed body text** predefined by WhatsApp
+(`"{{1}} is your verification code"`) and use a different API payload structure.
+
+### Key Differences from Standard Templates
+
+| Feature | Standard Templates | Authentication Templates |
+|---------|-------------------|-------------------------|
+| Body text | Customizable (`text` field) | Fixed by WhatsApp: `"{{1}} is your verification code"` |
+| Body configuration | `addBody($text)` | `addAuthenticationBody(bool $addSecurityReco)` |
+| Footer | `addFooter($text)` | `addAuthenticationFooter(?int $minutes)` |
+| Buttons | `QUICK_REPLY`, `URL`, `PHONE_NUMBER` | `OTP` with types: `COPY_CODE`, `ONE_TAP`, `ZERO_TAP` |
+| Button method | `addButton($type, $text)` | `addOtpButton($text, $otpType, ...)` |
+
+### Creating Authentication Templates
+
+```php
+use ScriptDevelop\WhatsappManager\Facades\Whatsapp;
+use ScriptDevelop\WhatsappManager\Models\WhatsappBusinessAccount;
+
+$account = WhatsappBusinessAccount::find($accountId);
+
+// EXAMPLE 1: Copy Code button (simplest)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('verification_code')
+    ->setLanguage('en_US')
+    ->addAuthenticationBody(true)            // Include security recommendation
+    ->addAuthenticationFooter(10)             // Code expires in 10 minutes
+    ->addOtpButton('Copy code', 'COPY_CODE')
+    ->save();
+
+// EXAMPLE 2: One-Tap Autofill button (Android only)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('auth_one_tap')
+    ->setLanguage('en_US')
+    ->addAuthenticationBody(true)
+    ->addAuthenticationFooter(5)
+    ->addOtpButton(
+        text: 'Autofill',
+        otpType: 'ONE_TAP',
+        autofillText: 'Autofill',
+        packageName: 'com.example.myapp',
+        signatureHash: 'K8a/AINcGX7'
+    )
+    ->save();
+
+// EXAMPLE 3: One-Tap with multiple supported apps (up to 5)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('auth_multi_app')
+    ->setLanguage('en_US')
+    ->addAuthenticationBody(false)           // No security recommendation
+    ->addOtpButton(
+        text: 'Autofill',
+        otpType: 'ONE_TAP',
+        autofillText: 'Autofill',
+        supportedApps: [
+            ['package_name' => 'com.example.app1', 'signature_hash' => 'K8a/AINcGX7'],
+            ['package_name' => 'com.example.app2', 'signature_hash' => 'bB9c/DEFhY8z'],
+        ]
+    )
+    ->save();
+
+// EXAMPLE 4: Zero-Tap (no user interaction required, Android only)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('auth_zero_tap')
+    ->setLanguage('en_US')
+    ->addAuthenticationBody(true)
+    ->addAuthenticationFooter(10)
+    ->addOtpButton(
+        text: 'Copy code',
+        otpType: 'ZERO_TAP',
+        autofillText: 'Autofill',
+        supportedApps: [
+            ['package_name' => 'com.example.myapp', 'signature_hash' => 'K8a/AINcGX7'],
+        ],
+        zeroTapTermsAccepted: true           // REQUIRED for ZERO_TAP
+    )
+    ->save();
+
+// EXAMPLE 5: Minimal authentication template (no footer, no security recommendation)
+$template = Whatsapp::template()
+    ->createAuthenticationTemplate($account)
+    ->setName('simple_auth')
+    ->setLanguage('en_US')
+    ->addAuthenticationBody(false)
+    ->addOtpButton('Copy code', 'COPY_CODE')
+    ->save();
+```
+
+### OTP Button Types
+
+| Type | Description | Requires `supported_apps`? | Requires `zero_tap_terms_accepted`? |
+|------|-------------|---------------------------|-------------------------------------|
+| `COPY_CODE` | Shows a "Copy code" button. User copies the code to clipboard and pastes it in your app. | No | No |
+| `ONE_TAP` | Shows an "Autofill" button. Tapping it opens your app with the code. Android only. Falls back to COPY_CODE on iOS. | Yes | No |
+| `ZERO_TAP` | Code is delivered automatically to your app via broadcast receiver. No user interaction. Android only. Falls back to ONE_TAP or COPY_CODE. | Yes | **Yes** |
+
+### `addOtpButton()` Parameters
+
+```php
+addOtpButton(
+    string $text = 'Copy code',                      // Button text (max 25 chars)
+    string $otpType = 'COPY_CODE',                   // COPY_CODE, ONE_TAP, ZERO_TAP
+    ?string $autofillText = null,                    // Custom autofill button text (max 25 chars)
+    ?string $packageName = null,                     // Android package name (ONE_TAP/ZERO_TAP)
+    ?string $signatureHash = null,                   // App signing key hash — 11 chars (ONE_TAP/ZERO_TAP)
+    array $supportedApps = [],                       // Up to 5: [{'package_name' => '...', 'signature_hash' => '...'}]
+    bool $zeroTapTermsAccepted = false               // REQUIRED for ZERO_TAP
+): self
+```
+
+> **Important Notes:**
+> - Authentication templates do NOT support headers (no images, videos, or text headers).
+> - The body text is always fixed: `"<CODE> is your verification code"` (localized per language).
+> - `package_name` format: at least two segments separated by dots, alphanumeric + underscore only.
+> - `signature_hash` format: exactly 11 characters, alphanumeric + `/+` `=`.
+> - Maximum 5 apps in `supported_apps`.
+
+---
+
 ## ❤️ Support
 
 If you find this project useful, consider supporting its development:

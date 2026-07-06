@@ -407,6 +407,36 @@ class TemplateEditor extends TemplateBuilder
     }
 
     /**
+     * AUTHENTICATION BODY MANAGEMENT
+     *
+     * Las plantillas de autenticación usan add_security_recommendation en lugar de text en el BODY.
+     */
+
+    public function addAuthenticationBody(bool $addSecurityRecommendation = true): self
+    {
+        if ($this->hasBody()) {
+            throw new TemplateComponentException('La plantilla ya tiene un BODY. Use changeBody() para modificarlo.');
+        }
+
+        return parent::addAuthenticationBody($addSecurityRecommendation);
+    }
+
+    /**
+     * AUTHENTICATION FOOTER MANAGEMENT
+     *
+     * Las plantillas de autenticación usan code_expiration_minutes en lugar de text en el FOOTER.
+     */
+
+    public function addAuthenticationFooter(?int $codeExpirationMinutes = null): self
+    {
+        if ($this->hasFooter()) {
+            throw new TemplateComponentException('La plantilla ya tiene un FOOTER. Use changeFooter() para modificarlo.');
+        }
+
+        return parent::addAuthenticationFooter($codeExpirationMinutes);
+    }
+
+    /**
      * BUTTONS MANAGEMENT
      */
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.79] - 2026-07-05
+
+### Added
+- `TemplateBuilder::addAuthenticationBody(bool $addSecurityRecommendation)`: agrega un componente BODY para plantillas de autenticación sin `text`, usando `add_security_recommendation` como exige la API de Meta.
+- `TemplateBuilder::addAuthenticationFooter(?int $codeExpirationMinutes)`: agrega un componente FOOTER para plantillas de autenticación sin `text`, usando `code_expiration_minutes` como exige la API de Meta.
+- `TemplateBuilder::addOtpButton()` expandido: ahora acepta `autofill_text`, `package_name`, `signature_hash`, `supported_apps[]` (máx 5), y `zero_tap_terms_accepted`. Validación completa de formatos de package_name y signature_hash.
+- `TemplateEditor`: sobreescritura de `addAuthenticationBody()` y `addAuthenticationFooter()` con el mismo patrón `hasBody()`/`hasFooter()` usado en el editor.
+
+### Changed
+- `addOtpButton()`: los parámetros nuevos son opcionales — backward compatible con código existente que solo pasa `$text` y `$otpType`.
+
 ## [1.1.78] - 2026-06-09
 
 ### Added

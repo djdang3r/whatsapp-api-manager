@@ -77,13 +77,98 @@ class TemplateBuilder
 return $this;
     }
 
-    public function addOtpButton(string $text = 'Copy code', string $otpType = 'COPY_CODE'): self
-    {
+    /**
+     * Agrega un botón OTP para plantillas de autenticación.
+     *
+     * @param string $text Texto del botón (ej: 'Copy code', 'Autofill')
+     * @param string $otpType Tipo de OTP: COPY_CODE, ONE_TAP, ZERO_TAP
+     * @param string|null $autofillText Texto personalizado para el botón de autocompletar (máx 25 chars)
+     * @param string|null $packageName Nombre del paquete Android (requerido para ONE_TAP y ZERO_TAP)
+     * @param string|null $signatureHash Hash de firma de la app Android (requerido para ONE_TAP y ZERO_TAP, 11 chars)
+     * @param array $supportedApps Array de apps soportadas [{package_name, signature_hash}, ...] (máx 5)
+     * @param bool $zeroTapTermsAccepted Aceptación de términos para ZERO_TAP
+     * @return self
+     * @throws InvalidArgumentException
+     */
+    public function addOtpButton(
+        string $text = 'Copy code',
+        string $otpType = 'COPY_CODE',
+        ?string $autofillText = null,
+        ?string $packageName = null,
+        ?string $signatureHash = null,
+        array $supportedApps = [],
+        bool $zeroTapTermsAccepted = false
+    ): self {
+        $validOtpTypes = ['COPY_CODE', 'ONE_TAP', 'ZERO_TAP'];
+        if (!in_array($otpType, $validOtpTypes)) {
+            throw new InvalidArgumentException(
+                'Tipo OTP inválido. Debe ser: ' . implode(', ', $validOtpTypes)
+            );
+        }
+
+        if (strlen($text) > 25) {
+            throw new InvalidArgumentException('El texto del botón OTP no puede exceder los 25 caracteres.');
+        }
+
         $button = [
             'type' => 'OTP',
             'otp_type' => $otpType,
             'text' => $text,
         ];
+
+        // Autofill text (opcional, máx 25 chars)
+        if ($autofillText !== null) {
+            if (strlen($autofillText) > 25) {
+                throw new InvalidArgumentException('El texto de autocompletar no puede exceder los 25 caracteres.');
+            }
+            $button['autofill_text'] = $autofillText;
+        }
+
+        // ONE_TAP y ZERO_TAP requieren package_name y signature_hash
+        if (in_array($otpType, ['ONE_TAP', 'ZERO_TAP'])) {
+            if (!empty($supportedApps)) {
+                if (count($supportedApps) > 5) {
+                    throw new InvalidArgumentException('Máximo 5 aplicaciones soportadas (supported_apps).');
+                }
+                foreach ($supportedApps as $app) {
+                    if (empty($app['package_name']) || empty($app['signature_hash'])) {
+                        throw new InvalidArgumentException(
+                            'Cada app en supported_apps requiere package_name y signature_hash.'
+                        );
+                    }
+                    if (!preg_match('/^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+$/', $app['package_name'])) {
+                        throw new InvalidArgumentException(
+                            "Nombre de paquete inválido: {$app['package_name']}"
+                        );
+                    }
+                    if (!preg_match('/^[a-zA-Z0-9+\/=]{11}$/', $app['signature_hash'])) {
+                        throw new InvalidArgumentException(
+                            "Hash de firma inválido: {$app['signature_hash']}. Debe tener 11 caracteres alfanuméricos, +, / o =."
+                        );
+                    }
+                }
+                $button['supported_apps'] = $supportedApps;
+            } elseif ($packageName !== null && $signatureHash !== null) {
+                // Fallback: usar los parámetros directos como una sola app
+                if (!preg_match('/^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+$/', $packageName)) {
+                    throw new InvalidArgumentException("Nombre de paquete inválido: {$packageName}");
+                }
+                if (!preg_match('/^[a-zA-Z0-9+\/=]{11}$/', $signatureHash)) {
+                    throw new InvalidArgumentException(
+                        "Hash de firma inválido: {$signatureHash}. Debe tener 11 caracteres alfanuméricos, +, / o =."
+                    );
+                }
+                $button['supported_apps'] = [[
+                    'package_name' => $packageName,
+                    'signature_hash' => $signatureHash,
+                ]];
+            }
+        }
+
+        // ZERO_TAP requiere zero_tap_terms_accepted
+        if ($otpType === 'ZERO_TAP') {
+            $button['zero_tap_terms_accepted'] = $zeroTapTermsAccepted;
+        }
 
         if (! $this->componentExists('BUTTONS')) {
             $this->templateData['components'][] = [
@@ -401,6 +486,30 @@ return $this;
         return $this;
     }
 
+    /**
+     * Agrega un componente BODY para plantillas de autenticación.
+     *
+     * Las plantillas de autenticación de WhatsApp NO aceptan texto personalizado en el body.
+     * El texto es fijo: "Tu código de verificación es {{1}}".
+     * Solo se puede configurar si se incluye la recomendación de seguridad.
+     *
+     * @param bool $addSecurityRecommendation Si se incluye "Por tu seguridad, no compartas este código."
+     * @return self
+     * @throws InvalidArgumentException Si ya existe un componente BODY
+     */
+    public function addAuthenticationBody(bool $addSecurityRecommendation = true): self
+    {
+        if ($this->componentExists('BODY')) {
+            throw new InvalidArgumentException('Solo se permite un componente BODY por plantilla.');
+        }
+
+        $this->templateData['components'][] = [
+            'type' => 'BODY',
+            'add_security_recommendation' => $addSecurityRecommendation,
+        ];
+
+        return $this;
+    }
 
     /**
      * Agrega un componente FOOTER a la plantilla
@@ -424,6 +533,40 @@ return $this;
         $this->templateData['components'][] = [
             'type' => 'FOOTER',
             'text' => $text,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Agrega un componente FOOTER para plantillas de autenticación.
+     *
+     * Las plantillas de autenticación de WhatsApp NO aceptan texto personalizado en el footer.
+     * En su lugar, se configura el tiempo de expiración del código en minutos.
+     *
+     * @param int|null $codeExpirationMinutes Minutos de expiración del código (1-90). Null para omitir.
+     * @return self
+     * @throws InvalidArgumentException Si ya existe un FOOTER o el valor está fuera de rango
+     */
+    public function addAuthenticationFooter(?int $codeExpirationMinutes = null): self
+    {
+        if ($this->componentExists('FOOTER')) {
+            throw new InvalidArgumentException('Solo se permite un componente FOOTER por plantilla.');
+        }
+
+        if ($codeExpirationMinutes === null) {
+            return $this;
+        }
+
+        if ($codeExpirationMinutes < 1 || $codeExpirationMinutes > 90) {
+            throw new InvalidArgumentException(
+                'El tiempo de expiración del código debe estar entre 1 y 90 minutos.'
+            );
+        }
+
+        $this->templateData['components'][] = [
+            'type' => 'FOOTER',
+            'code_expiration_minutes' => $codeExpirationMinutes,
         ];
 
         return $this;
