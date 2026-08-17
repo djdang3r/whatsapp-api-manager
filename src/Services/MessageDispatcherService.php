@@ -4476,6 +4476,14 @@ class MessageDispatcherService
         $this->validateMediaFile($file, $type_file);
 
         try {
+            // Normalizar el Content-Type: los archivos de audio MP4 (.m4a) se
+            // detectan a veces como video/mp4 por mime_content_type, pero
+            // WhatsApp espera audio/mp4 en el endpoint de subida de audio.
+            $fileMime = mime_content_type($file->getRealPath());
+            if ($type_file === 'audio' && $fileMime === 'video/mp4') {
+                $fileMime = 'audio/mp4';
+            }
+
             // Enviar la solicitud para subir el archivo
             $response = $this->apiClient->request(
                 'POST',
@@ -4494,7 +4502,7 @@ class MessageDispatcherService
                             'contents' => fopen($file->getRealPath(), 'r'),
                             'filename' => $file->getFilename(),
                             'headers' => [
-                                'Content-Type' => mime_content_type($file->getRealPath()),
+                                'Content-Type' => $fileMime,
                             ],
                         ],
                     ],
