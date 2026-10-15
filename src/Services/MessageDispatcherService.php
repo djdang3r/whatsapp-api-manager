@@ -3496,7 +3496,14 @@ class MessageDispatcherService
             'message_from' => preg_replace('/[\D+]/', '', $phoneNumberModel->display_phone_number),
             'message_to' => $fullPhoneNumber,
             'message_type' => 'PRODUCT',
-            'json' => $body ?? $productId,
+            // La columna `json` es de tipo JSON en la base de datos: guardar el
+            // texto del mensaje ('Hola') la rompe (SQLSTATE 22P02). Se codifica
+            // igual que en los envíos de lista y catálogo.
+            'json' => json_encode([
+                'sub_type' => 'product',
+                'product_retailer_id' => $productId,
+                'body' => $body,
+            ]),
             'message_method' => 'OUTPUT',
             'status' => MessageStatus::PENDING,
             'message_context_id' => $contextMessageId ? $this->getContextMessageId($contextMessageId) : null,
