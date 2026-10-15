@@ -3507,10 +3507,15 @@ class MessageDispatcherService
             $parameters = [
                 'product_retailer_id' => $productId,
                 'body' => $body,
+                // Meta espera un mensaje interactivo de tipo 'product' con
+                // action.catalog_id + action.product_retailer_id. La ruta antigua
+                // ('product' directo) generaba un payload que Meta rechazaba.
+                'interactive_type' => 'product',
+                'catalog_id' => $phoneNumberModel->catalog_id,
             ];
 
             // Enviar el mensaje a través de la API
-            $response = $this->sendViaApi($phoneNumberModel, $fullPhoneNumber, 'product', $parameters, $contextMessageId);
+            $response = $this->sendViaApi($phoneNumberModel, $fullPhoneNumber, 'interactive', $parameters, $contextMessageId);
 
             Log::channel('whatsapp')->info('Respuesta recibida de API WhatsApp para producto único.', ['response' => $response]);
 
@@ -4219,6 +4224,23 @@ class MessageDispatcherService
                             'name' => 'send_location'
                         ]
                     ];
+                }
+                elseif ($interactiveType === 'product') {
+                    $interactiveData = [
+                        'type' => 'product',
+                        'action' => [
+                            'catalog_id' => $parameters['catalog_id'] ?? $phone->catalog_id,
+                            'product_retailer_id' => $parameters['product_retailer_id'],
+                        ],
+                    ];
+
+                    if (!empty($parameters['body'])) {
+                        $interactiveData['body'] = ['text' => $parameters['body']];
+                    }
+
+                    if (!empty($parameters['footer'])) {
+                        $interactiveData['footer'] = ['text' => $parameters['footer']];
+                    }
                 }
                 elseif ($interactiveType === 'product_list') {
                     $interactiveData = [

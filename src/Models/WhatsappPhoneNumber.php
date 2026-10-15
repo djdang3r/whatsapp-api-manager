@@ -25,6 +25,7 @@ class WhatsappPhoneNumber extends Model
         'country_code',
         'phone_number',
         'api_phone_number_id',
+        'catalog_id',
         'verified_name',
         'new_display_name',
         'new_name_status',

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.82] - 2026-10-15
+
+### Fixed
+- `sendSingleProductMessage()` enviaba un payload en el formato antiguo (`data.product`) que la API de Meta rechaza. Ahora usa el mensaje interactivo documentado: `interactive.type = "product"` con `action.catalog_id` y `action.product_retailer_id` (y `body`/`footer` opcionales). Backward compatible: el método y sus parámetros no cambian.
+- `WhatsappPhoneNumber`: `catalog_id` añadido a `$fillable`. El modelo tenía la columna pero no era asignable en masa, así que `update(['catalog_id' => ...])` fallaba en silencio y el número quedaba sin catálogo.
+
 ## [1.1.79] - 2026-07-05
 
 ### Added
