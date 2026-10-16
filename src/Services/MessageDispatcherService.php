@@ -4274,11 +4274,13 @@ class MessageDispatcherService
                     $interactiveData = [
                         'type' => 'catalog_message',
                         'body' => ['text' => $parameters['body']],
+                        // Meta NO admite `action.parameters.catalog_id` en un mensaje de
+                        // catálogo ("Unexpected key catalog_id on param
+                        // interactive.action.parameters"): el catálogo lo determina la
+                        // configuración de comercio del número. El formato documentado es
+                        // solo `action.name = catalog_message`.
                         'action' => [
                             'name' => 'catalog_message',
-                            'parameters' => [
-                                'catalog_id' => $phone->catalog_id
-                            ]
                         ]
                     ];
 

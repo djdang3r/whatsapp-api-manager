@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.83] - 2026-10-15
 
 ### Fixed
+- El mensaje de **catálogo completo** enviaba `interactive.action.parameters.catalog_id`, que Meta rechaza con `Unexpected key "catalog_id" on param "interactive.action.parameters"`. El formato documentado es solo `action.name = "catalog_message"` (el catálogo lo determina la configuración de comercio del número), así que se elimina ese parámetro.
+
+## [1.1.83] - 2026-10-15
+
+### Fixed
 - `sendSingleProductMessage()` guardaba el texto del mensaje en la columna `json` de `whatsapp_messages`, que es de tipo JSON, y la inserción fallaba con `SQLSTATE[22P02]: invalid input syntax for type json` (p. ej. `Token "Hola" is invalid`). Ahora se codifica igual que en los envíos de lista y catálogo.
 
 ## [1.1.82] - 2026-10-15
