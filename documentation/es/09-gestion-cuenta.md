@@ -23,8 +23,10 @@ Esta sección cubre toda la funcionalidad de administración de tu cuenta de Wha
   - [3.1 Listar números de teléfono](#31-listar-números-de-teléfono)
   - [3.2 Detalle de un número](#32-detalle-de-un-número)
   - [3.3 Estado del nombre](#33-estado-del-nombre)
-  - [3.4 Registrar número en la API de WhatsApp](#34-registrar-número-en-la-api-de-whatsapp)
-  - [3.5 Eliminar número](#35-eliminar-número)
+   - [3.4 Registrar número en la API de WhatsApp](#34-registrar-número-en-la-api-de-whatsapp)
+   - [3.5 Eliminar número](#35-eliminar-número)
+   - [3.6 Registrar número en la Cloud API (conectar)](#36-registrar-número-en-la-cloud-api-conectar)
+   - [3.7 Cambiar PIN de verificación en dos pasos](#37-cambiar-pin-de-verificación-en-dos-pasos)
 - [4. Perfil de empresa](#4-perfil-de-empresa)
   - [4.1 Obtener perfil](#41-obtener-perfil)
   - [4.2 Actualizar perfil](#42-actualizar-perfil)
@@ -300,18 +302,18 @@ $status = Whatsapp::phone()
 
 ### 3.4 Registrar número en la API de WhatsApp
 
-Registra un número de teléfono existente en la API de WhatsApp Business. Meta permite un máximo de 10 solicitudes por cuenta en 72 horas.
+> ⚠️ **Legado y fácil de confundir.** `registerPhone()` **NO** registra el número en la Cloud API. Es un método legado que hace un `GET` a la cuenta empresarial solicitando el campo `primary_funding_id` (requiere permisos de BSP). Si lo que necesitás es **conectar el número para enviar/recibir mensajes**, usá [`registerPhoneForCloudApi()`](#36-registrar-número-en-la-cloud-api-conectar).
 
 ```php
 $response = Whatsapp::phone()
     ->forAccount($whatsappBusinessAccountId)
-    ->registerPhone($phoneNumberId);
+    ->registerPhone($whatsappBusinessAccountId); // GET primary_funding_id
 
-// Con datos adicionales (por ejemplo, PIN de dos pasos):
+// Con campos específicos:
 $response = Whatsapp::phone()
     ->forAccount($whatsappBusinessAccountId)
-    ->registerPhone($phoneNumberId, [
-        'pin' => '123456',
+    ->registerPhone($whatsappBusinessAccountId, [
+        'fields' => 'id,name,primary_funding_id',
     ]);
 ```
 
@@ -330,6 +332,59 @@ if ($deleted) {
 ```
 
 > **Nota:** Esta operación solo elimina el registro local. Para desconectar el número de la WABA en Meta, utiliza el panel de Meta Business Suite.
+
+### 3.6 Registrar número en la Cloud API (conectar)
+
+Registra un número de teléfono en la **Cloud API** de WhatsApp (`POST /{phone_number_id}/register`). Este es el paso que deja el número **conectado** para poder enviar y recibir mensajes. No confundir con `registerPhone()` (ver [3.4](#34-registrar-número-en-la-api-de-whatsapp)).
+
+```php
+$response = Whatsapp::phone()
+    ->forAccount($whatsappBusinessAccountId)
+    ->registerPhoneForCloudApi(
+        phoneNumberId: $phoneNumberId,
+        pin: '123456'
+    );
+
+// Respuesta: ['success' => true]
+```
+
+**Parámetros:**
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `phoneNumberId` | `string` | ID de la API del número (`api_phone_number_id`). |
+| `pin` | `string` | PIN de verificación en dos pasos (6 dígitos). |
+| `dataLocalizationRegion` | `string|null` | Región opcional de localización de datos. |
+
+**Reglas importantes de Meta:**
+- Requiere permisos `whatsapp_business_management` + `whatsapp_business_messaging`.
+- El PIN debe coincidir con el de verificación en dos pasos si ya estaba configurado; si no, se establece en este paso.
+- Máximo **10 solicitudes por número en 72 horas** (error `#133016`).
+- Verificar el número (SMS/código) es un paso distinto: un número puede estar `VERIFIED` pero seguir `PENDING` hasta que se registre.
+
+### 3.7 Cambiar PIN de verificación en dos pasos
+
+Cambia o establece el PIN de verificación en dos pasos de un número (`POST /{phone_number_id}`).
+
+```php
+$response = Whatsapp::phone()
+    ->forAccount($whatsappBusinessAccountId)
+    ->updateTwoStepPin(
+        phoneNumberId: $phoneNumberId,
+        pin: '654321'
+    );
+
+// Respuesta: ['success' => true]
+```
+
+**Parámetros:**
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `phoneNumberId` | `string` | ID de la API del número (`api_phone_number_id`). |
+| `pin` | `string` | Nuevo PIN de verificación en dos pasos (6 dígitos). |
+
+> **Nota:** El PIN nunca se persiste ni se registra en los logs del paquete.
 
 ---
 

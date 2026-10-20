@@ -131,4 +131,29 @@ class WhatsappManager
     {
         return $this->account()->registerPhone($phoneNumberId, $data);
     }
+
+    /**
+     * Registra un número de teléfono en la Cloud API de WhatsApp.
+     *
+     * @param string $phoneNumberId ID de la API del número de teléfono (api_phone_number_id).
+     * @param string $pin PIN de verificación en dos pasos (6 dígitos).
+     * @param string|null $dataLocalizationRegion Región opcional de localización de datos.
+     * @return array Respuesta de la API ({ "success": true }).
+     */
+    public function registerPhoneForCloudApi(string $phoneNumberId, string $pin, ?string $dataLocalizationRegion = null): array
+    {
+        return $this->account()->registerPhoneForCloudApi($phoneNumberId, $pin, $dataLocalizationRegion);
+    }
+
+    /**
+     * Cambia o establece el PIN de verificación en dos pasos de un número.
+     *
+     * @param string $phoneNumberId ID de la API del número de teléfono (api_phone_number_id).
+     * @param string $pin Nuevo PIN de verificación en dos pasos (6 dígitos).
+     * @return array Respuesta de la API ({ "success": true }).
+     */
+    public function updateTwoStepPin(string $phoneNumberId, string $pin): array
+    {
+        return $this->account()->updateTwoStepPin($phoneNumberId, $pin);
+    }
 }

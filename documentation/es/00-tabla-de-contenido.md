@@ -97,7 +97,7 @@ LARAVEL WHatsapp Manager
 
    - Datos de la WABA (obtener y actualizar)
    - Suscripciones y overrides de webhooks
-   - Números de teléfono (listar, detalle, registrar, eliminar)
+   - Números de teléfono (listar, detalle, registrar en Cloud API, cambiar PIN, eliminar)
    - Perfil de empresa (GET, actualización, foto de perfil)
    - Nombre visible (solicitar cambio y consultar estado)
    - Cuenta Oficial de Empresa (OBA)

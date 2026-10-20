@@ -45,6 +45,10 @@ class WhatsappPhoneNumber extends Model
         'disconnected_at',
         'fully_removed_at',
         'disconnection_reason',
+
+        // Estado real reportado por Meta (no confundir con el status interno)
+        'meta_connection_status',
+        'meta_status_checked_at',
     ];
 
     protected $casts = [
@@ -52,6 +56,7 @@ class WhatsappPhoneNumber extends Model
         'webhook_configuration' => 'array',
         'disconnected_at' => 'datetime',
         'fully_removed_at' => 'datetime',
+        'meta_status_checked_at' => 'datetime',
     ];
 
     // Scopes para filtrar por estado
@@ -84,6 +89,26 @@ class WhatsappPhoneNumber extends Model
     public function isRemoved(): bool
     {
         return $this->status === 'removed';
+    }
+
+    /**
+     * Indica si Meta reporta el número como CONNECTED (registrado y listo
+     * para enviar/recibir mensajes por la Cloud API).
+     */
+    public function isMetaConnected(): bool
+    {
+        return $this->meta_connection_status === 'CONNECTED';
+    }
+
+    /**
+     * Indica si el número necesita completar el registro en la Cloud API
+     * (Meta reporta PENDING). Otros estados (OFFLINE, BANNED, RESTRICTED,
+     * DEREGISTERED, MIGRATED) requieren acciones distintas y no cuentan
+     * como "pendiente de registro".
+     */
+    public function needsRegistration(): bool
+    {
+        return $this->meta_connection_status === 'PENDING';
     }
 
     public function messages()

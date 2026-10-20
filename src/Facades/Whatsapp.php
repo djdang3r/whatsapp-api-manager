@@ -19,6 +19,8 @@ use ScriptDevelop\WhatsappManager\Services\Flows\FlowResponse;
  * @method static array getPhoneNumbers(string $whatsappBusinessId)
  * @method static array getPhoneNumberDetails(string $phoneNumberId)
  * @method static array getBusinessProfile(string $phoneNumberId)
+ * @method static array registerPhoneForCloudApi(string $phoneNumberId, string $pin, ?string $dataLocalizationRegion = null)
+ * @method static array updateTwoStepPin(string $phoneNumberId, string $pin)
  */
 class Whatsapp extends Facade
 {

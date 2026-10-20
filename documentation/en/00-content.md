@@ -72,6 +72,14 @@ LARAVEL WhatsApp Manager
    - Event structure
    - Supported message types
 
+<a href="09-account-management.md" title="Documentation in English">
+9. 🏢 Account & Phone Number Management
+</a>
+
+   - Register a phone number on the Cloud API
+   - Change the two-step verification PIN
+   - Connection status helpers
+
 ---
 
 ## ❤️ Support

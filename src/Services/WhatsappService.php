@@ -656,6 +656,113 @@ class WhatsappService
     }
 
     /**
+     * Registra un número de teléfono en la Cloud API de WhatsApp
+     * (POST /{phone_number_id}/register).
+     *
+     * Este es el paso que deja el número "conectado" para poder enviar y recibir
+     * mensajes a través de la Cloud API. NO confundir con registerPhone(), que
+     * consulta el primary_funding_id de la cuenta empresarial.
+     *
+     * Requisitos de Meta:
+     * - Permisos whatsapp_business_management + whatsapp_business_messaging.
+     * - PIN de verificación en dos pasos: si el número ya lo tiene configurado,
+     *   debe coincidir; si no, se establece en este paso.
+     * - Máximo 10 solicitudes por número en 72 horas (error #133016).
+     *
+     * @param string $phoneNumberId ID de la API del número de teléfono (api_phone_number_id).
+     * @param string $pin PIN de verificación en dos pasos (6 dígitos).
+     * @param string|null $dataLocalizationRegion Región opcional de localización de datos.
+     * @return array Respuesta de la API ({ "success": true }).
+     */
+    public function registerPhoneForCloudApi(string $phoneNumberId, string $pin, ?string $dataLocalizationRegion = null): array
+    {
+        $this->ensureAccountIsSet();
+
+        $this->assertValidPin($pin);
+
+        $url = Endpoints::build(Endpoints::REGISTER_PHONE, [
+            'phone_number_id' => $phoneNumberId,
+        ]);
+
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'pin' => $pin,
+        ];
+
+        if ($dataLocalizationRegion !== null) {
+            $payload['data_localization_region'] = $dataLocalizationRegion;
+        }
+
+        Log::channel('whatsapp')->debug('Registrando número en la Cloud API', [
+            'phone_number_id' => $phoneNumberId,
+            'data_localization_region' => $dataLocalizationRegion,
+        ]);
+
+        $response = $this->apiClient->request(
+            'POST',
+            $url,
+            [],
+            $payload,
+            [],
+            $this->getAuthHeaders()
+        );
+
+        Log::channel('whatsapp')->debug('Respuesta de registerPhoneForCloudApi:', $response);
+
+        return $response;
+    }
+
+    /**
+     * Cambia o establece el PIN de verificación en dos pasos de un número
+     * (POST /{phone_number_id}).
+     *
+     * @param string $phoneNumberId ID de la API del número de teléfono (api_phone_number_id).
+     * @param string $pin Nuevo PIN de verificación en dos pasos (6 dígitos).
+     * @return array Respuesta de la API ({ "success": true }).
+     */
+    public function updateTwoStepPin(string $phoneNumberId, string $pin): array
+    {
+        $this->ensureAccountIsSet();
+
+        $this->assertValidPin($pin);
+
+        $url = Endpoints::build(Endpoints::MANAGE_PHONE_NUMBER, [
+            'phone_number_id' => $phoneNumberId,
+        ]);
+
+        Log::channel('whatsapp')->debug('Actualizando PIN de verificación en dos pasos', [
+            'phone_number_id' => $phoneNumberId,
+        ]);
+
+        $response = $this->apiClient->request(
+            'POST',
+            $url,
+            [],
+            ['pin' => $pin],
+            [],
+            $this->getAuthHeaders()
+        );
+
+        Log::channel('whatsapp')->debug('Respuesta de updateTwoStepPin:', $response);
+
+        return $response;
+    }
+
+    /**
+     * Valida que el PIN de verificación en dos pasos tenga exactamente 6 dígitos.
+     *
+     * @param string $pin PIN a validar.
+     * @return void
+     * @throws \InvalidArgumentException Si el PIN no es válido.
+     */
+    protected function assertValidPin(string $pin): void
+    {
+        if (!preg_match('/^\d{6}$/', $pin)) {
+            throw new \InvalidArgumentException('El PIN de verificación en dos pasos debe tener exactamente 6 dígitos.');
+        }
+    }
+
+    /**
      * Actualiza el perfil de empresa del número de teléfono en la API de WhatsApp
      * y sincroniza los campos escalares en la base de datos local.
      *
