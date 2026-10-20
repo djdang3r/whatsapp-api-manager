@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-20
+
+### Added
+- `registerPhoneForCloudApi()`: registra un número en la Cloud API (`POST /{phone_number_id}/register`) con `messaging_product` y el PIN de verificación en dos pasos. Deja el número `CONNECTED` para enviar/recibir mensajes.
+- `updateTwoStepPin()`: cambia o establece el PIN de verificación en dos pasos (`POST /{phone_number_id}`).
+- Endpoint `REGISTER_PHONE = '{phone_number_id}/register'` en `Endpoints`.
+- Migración `meta_connection_status` + `meta_status_checked_at` en `whatsapp_phone_numbers`: estado reportado por Meta, separado del `status` interno.
+- `WhatsappPhoneNumber`: helpers `isMetaConnected()` y `needsRegistration()`, más `$fillable`/casts de los nuevos campos.
+- Exposición de los nuevos métodos en `AccountRegistrationService`, `WhatsappManager` y la fachada `Whatsapp`.
+- Documentación (es/en) para registrar el número en la Cloud API y cambiar el PIN.
+
+### Changed
+- Documentación: se aclara que `registerPhone()` es un método legado que hace `GET primary_funding_id` y **no** registra el número.
+
 ## [1.1.84] - 2026-10-15
 
 ### Fixed
