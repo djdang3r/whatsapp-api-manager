@@ -77,6 +77,38 @@ $phone->isMetaConnected();   // true when meta_connection_status === 'CONNECTED'
 $phone->needsRegistration(); // true when meta_connection_status === 'PENDING'
 ```
 
+## Coexistence (WhatsApp Business App)
+
+When a number is connected through coexistence, Meta sends additional webhooks on top of `messages`:
+
+| Webhook | Package event | When |
+|---|---|---|
+| `smb_message_echoes` | `CoexistenceSmbMessageEcho` + `MessageReceived` (`is_smb_echo=true`) | Messages sent from the mobile app |
+| `smb_app_state_sync` | `CoexistenceContactRecordSynced` | Contacts from the mobile app |
+| `history` | `CoexistenceHistoryMessageReceived` (per message) + `CoexistenceHistorySynced` (summary) | Conversation history |
+
+### Bridge events into your application
+
+```php
+use ScriptDevelop\WhatsappManager\Events\CoexistenceHistoryMessageReceived;
+use ScriptDevelop\WhatsappManager\Events\CoexistenceContactRecordSynced;
+
+// History: fired for each persisted message (contact, message, phase).
+// Not broadcast: process it on a queue and filter by date to limit the range.
+Event::listen(CoexistenceHistoryMessageReceived::class, function ($event) {
+    // $event->contact, $event->message, $event->phase
+    // message_method: INPUT | OUTPUT (user/assistant role)
+    // json_content: raw payload (original timestamp)
+});
+
+// Contacts: contact, action (create/update/remove), phoneNumberId.
+Event::listen(CoexistenceContactRecordSynced::class, function ($event) {
+    // $event->contact, $event->action, $event->phoneNumberId
+});
+```
+
+> **Note:** Meta delivers `history` and `smb_app_state_sync` only once per business customer, and only if the business agrees to share them. Otherwise error `2593109` is returned.
+
 <div align="center">
 <sub>WhatsApp Manager Webhook Documentation |
 <a href="https://github.com/djdang3r/whatsapp-api-manager">View on GitHub</a></sub>

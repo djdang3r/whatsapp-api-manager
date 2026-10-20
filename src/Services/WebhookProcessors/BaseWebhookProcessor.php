@@ -2858,6 +2858,7 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         }
 
         // Lógica personalizada post-procesamiento
+        $this->fireCoexistenceHistoryMessageReceived($contact, $messageRecord, $phase);
         $this->afterProcessHistoryMessage($message, $contact, $whatsappPhone, $phase);
     }
 
@@ -3008,6 +3009,10 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         }
 
         // Post-procesamiento personalizado
+        if (isset($contact) && $contact) {
+            $this->fireCoexistenceContactRecordSynced($contact, $action ?: 'update', $whatsappPhone->api_phone_number_id ?? null);
+        }
+
         $this->afterProcessContactSync($syncItem, $whatsappPhone);
     }
 
@@ -4291,6 +4296,24 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
     {
         $event = config('whatsapp.events.coexistence.history_synced');
         event(new $event($data));
+    }
+
+    /**
+     * Dispara el evento por cada mensaje histórico persistido. No se broadcasta:
+     * el consumidor lo ingiere en cola (el historial puede ser voluminoso).
+     */
+    protected function fireCoexistenceHistoryMessageReceived(Model $contact, Model $message, int $phase): void
+    {
+        event(new \ScriptDevelop\WhatsappManager\Events\CoexistenceHistoryMessageReceived($contact, $message, $phase));
+    }
+
+    /**
+     * Dispara el evento por cada contacto persistido en la sincronización SMB.
+     * Incluye el número que originó el sync para resolver la empresa.
+     */
+    protected function fireCoexistenceContactRecordSynced(Model $contact, string $action, ?string $phoneNumberId): void
+    {
+        event(new \ScriptDevelop\WhatsappManager\Events\CoexistenceContactRecordSynced($contact, $action, $phoneNumberId));
     }
 
     /**

@@ -852,6 +852,40 @@ $response = Whatsapp::phone()
 
 ---
 
+## Coexistencia (WhatsApp Business App)
+
+Cuando un número se conecta por coexistencia, Meta envía webhooks adicionales además de `messages`:
+
+| Webhook | Evento del paquete | Cuándo |
+|---|---|---|
+| `smb_message_echoes` | `CoexistenceSmbMessageEcho` + `MessageReceived` (`is_smb_echo=true`) | Mensajes enviados desde la app del móvil |
+| `smb_app_state_sync` | `CoexistenceContactRecordSynced` | Contactos de la app del móvil |
+| `history` | `CoexistenceHistoryMessageReceived` (por mensaje) + `CoexistenceHistorySynced` (resumen) | Historial de conversaciones |
+
+### Eventos para puentear a tu aplicación
+
+```php
+use ScriptDevelop\WhatsappManager\Events\CoexistenceHistoryMessageReceived;
+use ScriptDevelop\WhatsappManager\Events\CoexistenceContactRecordSynced;
+
+// Historial: se dispara por cada mensaje persistido (contact, message, phase).
+// No se broadcasta: procesalo en cola y filtrá por fecha si querés limitar el rango.
+Event::listen(CoexistenceHistoryMessageReceived::class, function ($event) {
+    // $event->contact, $event->message, $event->phase
+    // message_method: INPUT | OUTPUT (rol user/assistant)
+    // json_content: payload crudo (timestamp original)
+});
+
+// Contactos: contact, action (create/update/remove), phoneNumberId.
+Event::listen(CoexistenceContactRecordSynced::class, function ($event) {
+    // $event->contact, $event->action, $event->phoneNumberId
+});
+```
+
+> **Nota:** Meta entrega `history` y `smb_app_state_sync` una sola vez por business customer y solo si el negocio acepta compartirlos. Si no los comparte, llega el error `2593109`.
+
+---
+
 <div align="center">
 <sub>Documentación de WhatsApp API Manager |
 <a href="https://github.com/djdang3r/whatsapp-api-manager">Ver en GitHub</a></sub>

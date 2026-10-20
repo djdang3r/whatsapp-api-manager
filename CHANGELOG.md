@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-20
+
+### Added
+- Evento `CoexistenceHistoryMessageReceived` (`contact`, `message`, `phase`): se dispara por cada mensaje histórico persistido en la sincronización de coexistencia (`history`). No se broadcasta (el historial puede ser voluminoso; el consumidor lo ingiere en cola).
+- Evento `CoexistenceContactRecordSynced` (`contact`, `action`, `phoneNumberId`): se dispara por cada contacto persistido en `smb_app_state_sync`, con el número que originó la sincronización para resolver la empresa.
+- Ambos permiten puentear el historial y los contactos de coexistencia a las tablas propias de una aplicación (antes solo los ecos SMB disparaban eventos y el historial/contactos quedaban aislados en las tablas del paquete).
+
 ## [1.2.0] - 2026-10-20
 
 ### Added
