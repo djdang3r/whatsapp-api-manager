@@ -44,10 +44,53 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
                 return $this->handleFlowEndpointRequest($request);
             }
 
+            // La firma solo se exige cuando hay app_secret configurado.
+            // Así no rompemos instalaciones que aún no lo tienen configurado.
+            if (!$this->verifySignature($request)) {
+                return response()->json(['error' => 'Invalid signature.'], 403);
+            }
+
             return $this->processIncomingMessage($request);
         }
         Log::channel('whatsapp')->error('Registro webhook invalido', [$request]);
         return response()->json(['error' => 'Invalid request method.'], 400);
+    }
+
+    /**
+     * Valida X-Hub-Signature / X-Hub-Signature-256 de Meta.
+     *
+     * Si no hay app_secret configurado se omite para mantener compatibilidad
+     * con instalaciones existentes. Nunca se debe exponer el webhook sin firma
+     * en producción. Configurar WHATSAPP_APP_SECRET.
+     */
+    protected function verifySignature(Request $request): bool
+    {
+        $appSecret = config('whatsapp.webhook.app_secret', env('WHATSAPP_APP_SECRET'));
+        $enabled = (bool) config('whatsapp.webhook.verify_signature', true);
+
+        if (!$enabled || empty($appSecret)) {
+            return true;
+        }
+
+        $signature = $request->header('X-Hub-Signature-256')
+            ?: $request->header('X-Hub-Signature');
+
+        if (!$signature) {
+            Log::channel('whatsapp')->warning('Webhook sin cabecera de firma.');
+            return false;
+        }
+
+        [$algorithm, $hash] = array_pad(explode('=', $signature, 2), 2, null);
+        if (!in_array($algorithm, ['sha1', 'sha256'], true) || empty($hash)) {
+            Log::channel('whatsapp')->warning('Formato de firma de webhook inválido.', [
+                'signature' => $signature,
+            ]);
+            return false;
+        }
+
+        $expected = hash_hmac($algorithm, $request->getContent(), $appSecret);
+
+        return hash_equals($expected, $hash);
     }
 
     public function verifyWebhook(Request $request, string $verifyToken): Response|JsonResponse
@@ -68,138 +111,162 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         $payload = $request->all();
         Log::channel('whatsapp')->info('Received WhatsApp Webhook Payload:', $payload);
 
-        $change = data_get($payload, 'entry.0.changes.0');
+        $entries = $payload['entry'] ?? [];
+        if (!is_array($entries) || $entries === []) {
+            Log::channel('whatsapp')->warning('Payload sin entry.', $payload);
+            return response()->json(['error' => 'Invalid payload.'], 422);
+        }
+
+        $processedChanges = 0;
+
+        // Meta puede agrupar varios eventos en un mismo POST:
+        // entry[] > changes[] > value.messages[] / value.statuses[].
+        // Procesar solo entry.0.changes.0 pierde eventos cuando llegan en lote.
+        foreach ($entries as $entry) {
+            $changes = is_array($entry) ? ($entry['changes'] ?? []) : [];
+            if (!is_array($changes)) {
+                continue;
+            }
+
+            foreach ($changes as $change) {
+                if (!is_array($change)) {
+                    continue;
+                }
+
+                $this->processChange($payload, $change);
+                $processedChanges++;
+            }
+        }
+
+        if ($processedChanges === 0) {
+            Log::channel('whatsapp')->warning('Payload sin changes procesables.', $payload);
+            return response()->json(['error' => 'Invalid payload.'], 422);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Procesa un único item de entry[].changes[].
+     *
+     * No devuelve Response para que processIncomingMessage pueda recorrer
+     * todos los cambios del lote sin cortar el resto.
+     */
+    protected function processChange(array $payload, array $change): void
+    {
         $value = $change['value'] ?? null;
         $field = $change['field'] ?? null;
 
         Log::channel('whatsapp')->info('Processing webhook field:', ['field' => $field]);
 
+        if (!is_array($value)) {
+            Log::channel('whatsapp')->warning('Webhook change sin value procesable.', [
+                'field' => $field,
+                'change' => $change,
+            ]);
+            return;
+        }
+
         switch ($field) {
             case 'history':
                 $this->handleHistorySync($value);
-                return response()->json(['success' => true]);
+                return;
 
             case 'smb_app_state_sync':
                 $this->handleSmbAppStateSync($value);
-                return response()->json(['success' => true]);
+                return;
 
             case 'smb_message_echoes':
                 $this->handleSmbMessageEchoes($value);
-                return response()->json(['success' => true]);
+                return;
 
             case 'account_update':
                 $this->handleAccountUpdate($value);
-                return response()->json(['success' => true]);
+                return;
 
             case 'business_capability_update':
                 $this->handleBusinessCapabilityUpdate($value, $payload);
-                return response()->json(['success' => true]);
+                return;
 
             case 'flows':
                 $this->handleFlowStatusAndPerformance($value);
-                return response()->json(['success' => true]);
+                return;
         }
 
         if ($field === 'phone_number_name_update') {
             $this->handlePhoneNumberNameUpdate($value);
-            return response()->json(['success' => true]);
+            return;
         }
 
         if ($field === 'phone_number_quality_update') {
             $this->handlePhoneNumberQualityUpdate($value);
-            return response()->json(['success' => true]);
+            return;
         }
 
         if ($field === 'message_template' or $field === 'message_template_status_update') {
             $this->handleTemplateEvent($payload, $field, $value);
-            return response()->json(['success' => true]);
+            return;
         }
-
-        /*if( $field==='message_template_components_update' ){
-            $templateId = $value['message_template_id'] ?? null;
-
-            if ( $templateId) {
-                $template = WhatsappModelResolver::template()
-                    ->where('wa_template_id', $templateId)
-                    ->first();
-                if (!$template) {
-                    Log::channel('whatsapp')->warning("Template not found: {$templateId}");
-
-                    //Usar la API para obtener el template, esto puede suceder por que se creó ó editó la plantilla desde el portal de Whatsapp Business, esto hará que en cuanto se aprueve o rechace se emita un webhook que esta clase procesará.
-                    $this->findTemplateAPI($payload);
-                }
-            }
-
-            return response()->json(['success' => true]);
-        }*/
 
         if ($field === 'user_preferences') {
             $this->handleUserPreferences($value);
-            return response()->json(['success' => true]);
+            return;
         }
 
         if ($field === 'business_username_update') {
             $this->handleBusinessUsernameUpdate($value);
-            return response()->json(['success' => true]);
+            return;
         }
 
         if ($field === 'user_id_update') {
             $this->handleUserIdUpdate($value);
-            return response()->json(['success' => true]);
+            return;
         }
 
         if (!$value) {
-            Log::channel('whatsapp')->warning('No value found in webhook payload.', $payload);
-            return response()->json(['error' => 'Invalid payload.'], 422);
+            Log::channel('whatsapp')->warning('No value found in webhook change.', [
+                'field' => $field,
+                'change' => $change,
+            ]);
+            return;
         }
 
-        // Si es evento de estado de plantilla
-        if ($field === 'message_template_status_update' && isset($value['statuses'][0])) {
-            $this->handleTemplateStatusUpdate($value['statuses'][0], $payload, $field);
-        }
+        $contact = $value['contacts'][0] ?? null;
+        $metadata = $value['metadata'] ?? null;
 
-        // Si es mensaje normal
-        if (isset($value['messages'][0])) {
-            $message = $value['messages'][0];
+        // Un mismo value puede traer varios mensajes.
+        foreach (($value['messages'] ?? []) as $message) {
+            if (!is_array($message)) {
+                continue;
+            }
+
             $messageType = $message['type'] ?? '';
 
             if ($messageType === 'edit') {
-                $this->handleEditMessage(
-                    $message,
-                    $value['contacts'][0] ?? null,
-                    $value['metadata'] ?? null
-                );
+                $this->handleEditMessage($message, $contact, $metadata);
             } elseif ($messageType === 'revoke') {
-                $this->handleRevokeMessage(
-                    $message,
-                    $value['contacts'][0] ?? null,
-                    $value['metadata'] ?? null
-                );
+                $this->handleRevokeMessage($message, $contact, $metadata);
             } elseif ($messageType === 'system') {
                 // Los mensajes de sistema NO incluyen contacts, solo metadata
-                $this->handleSystemMessage(
-                    $message,
-                    $value['metadata'] ?? null
-                );
+                $this->handleSystemMessage($message, $metadata);
             }
+
             if ($messageType === 'interactive' && data_get($message, 'interactive.type') === 'nfm_reply') {
-                $this->handleFlowResponseMessage($message, $value['contacts'][0] ?? null, $value['metadata'] ?? null);
-                return response()->json(['success' => true]);
-            } else {
-                $this->handleIncomingMessage(
-                    $message,
-                    $value['contacts'][0] ?? null,
-                    $value['metadata'] ?? null
-                );
+                $this->handleFlowResponseMessage($message, $contact, $metadata);
+                continue;
             }
+
+            $this->handleIncomingMessage($message, $contact, $metadata);
         }
 
-        // Si es status de mensaje (entregado, leído, etc.)
-        elseif (isset($value['statuses'][0])) {
-            $this->handleStatusUpdate($value['statuses'][0], $value['contacts'] ?? []);
-        }
+        // Un mismo value puede traer varios status (sent, delivered, read, failed).
+        foreach (($value['statuses'] ?? []) as $status) {
+            if (!is_array($status)) {
+                continue;
+            }
 
-        return response()->json(['success' => true]);
+            $this->handleStatusUpdate($status, $value['contacts'] ?? []);
+        }
     }
 
     protected function handleIncomingMessage(array $message, ?array $contact, ?array $metadata): void

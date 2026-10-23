@@ -269,6 +269,12 @@ return [
         // Token de verificación para el webhook
         'verify_token' => env('WHATSAPP_VERIFY_TOKEN'),
 
+        // App Secret de Meta para validar X-Hub-Signature / X-Hub-Signature-256
+        'app_secret' => env('WHATSAPP_APP_SECRET'),
+
+        // Exigir firma en POST cuando app_secret esté configurado
+        'verify_signature' => env('WHATSAPP_VERIFY_SIGNATURE', true),
+
         // Procesador personalizado para webhooks (valor por defecto)
         'processor' => \ScriptDevelop\WhatsappManager\Services\WebhookProcessors\BaseWebhookProcessor::class,
 

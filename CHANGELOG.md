@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-22
+
+### Fixed
+- El webhook procesaba únicamente `entry.0.changes.0` y, dentro de ese cambio, solo `messages[0]` o `statuses[0]`. Ahora recorre todos los `entry[]`, `changes[]`, `messages[]` y `statuses[]` del lote, evitando perder eventos cuando Meta agrupa varios mensajes o estados en un mismo POST.
+
+### Added
+- Validación opcional de `X-Hub-Signature-256` / `X-Hub-Signature` usando `WHATSAPP_APP_SECRET`. Se activa por defecto cuando el secreto está configurado y se omite cuando no lo está para no romper instalaciones existentes. Las peticiones encriptadas de Flow Endpoint no pasan por esta validación.
+- Configuración `whatsapp.webhook.app_secret` y `whatsapp.webhook.verify_signature` (`WHATSAPP_VERIFY_SIGNATURE`, por defecto `true`).
+- Tests de regresión para lotes de webhook y firma inválida/válida.
+
 ## [1.3.0] - 2026-10-20
 
 ### Added
