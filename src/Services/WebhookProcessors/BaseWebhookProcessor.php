@@ -244,11 +244,14 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
 
             if ($messageType === 'edit') {
                 $this->handleEditMessage($message, $contact, $metadata);
+                continue;
             } elseif ($messageType === 'revoke') {
                 $this->handleRevokeMessage($message, $contact, $metadata);
+                continue;
             } elseif ($messageType === 'system') {
                 // Los mensajes de sistema NO incluyen contacts, solo metadata
                 $this->handleSystemMessage($message, $metadata);
+                continue;
             }
 
             if ($messageType === 'interactive' && data_get($message, 'interactive.type') === 'nfm_reply') {

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-10-22
+
+### Fixed
+- Los mensajes `edit`, `revoke` y `system` ejecutaban su handler específico y luego caían en `handleIncomingMessage()`, pudiendo procesarse dos veces. Ahora cada tipo termina su iteración después del handler correspondiente.
+
+### Added
+- Test de regresión `WebhookFallThroughTest` que verifica que `edit`/`revoke`/`system` no llegan a `handleIncomingMessage` y que un mensaje `text` normal sí se procesa.
+
 ## [1.3.2] - 2026-10-22
 
 ### Added
