@@ -275,6 +275,10 @@ return [
         // Exigir firma en POST cuando app_secret esté configurado
         'verify_signature' => env('WHATSAPP_VERIFY_SIGNATURE', true),
 
+        // Registrar la ruta legacy /whatsapp-webhook del paquete.
+        // En apps que ya exponen /api/v1/webhooks/whatsapp conviene apagarla.
+        'routes_enabled' => env('WHATSAPP_WEBHOOK_ROUTES', true),
+
         // Procesador personalizado para webhooks (valor por defecto)
         'processor' => \ScriptDevelop\WhatsappManager\Services\WebhookProcessors\BaseWebhookProcessor::class,
 

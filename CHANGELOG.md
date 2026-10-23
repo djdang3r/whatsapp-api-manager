@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-22
+
+### Added
+- `whatsapp.webhook.routes_enabled` (`WHATSAPP_WEBHOOK_ROUTES`, default `true`): permite no registrar la ruta legacy `/whatsapp-webhook` cuando la aplicación ya expone su propio endpoint firmado (por ejemplo `/api/v1/webhooks/whatsapp`).
+
 ## [1.3.1] - 2026-10-22
 
 ### Fixed
