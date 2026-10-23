@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-10-23
+
+### Added
+- Cobertura de webhooks de estado: `phone_number_status_update` emite `PhoneNumberStatusUpdated` y actualiza `meta_connection_status`/`quality_rating` cuando el número existe localmente.
+- `message_template_quality_update` y `message_template_components_update` emiten los nuevos eventos `TemplateQualityUpdated` y `TemplateComponentsUpdated` con el payload documentado por Meta.
+- `MessageSent` se emite para el status `sent` y `MessageDeleted` para `deleted` (On-Premises).
+- `flows` y `message_template_components_update` agregados a `whatsapp.webhook.subscribed_fields` por defecto.
+
+### Fixed
+- Los webhooks de plantilla ahora emiten `TemplateApproved`/`TemplateRejected`/`TemplateCreated`; antes solo actualizaban la base local.
+- El status `deleted` ya no intenta escribirse en la columna enum `status` (no lo admite); solo dispara su evento.
+- El despacho de eventos configurados resuelve el casing histórico `Scriptdevelop` vs `ScriptDevelop` para que las clases se autoloadeen también sin classmap optimizado.
+- `WebhookEventCoverageTest` cubre los eventos nuevos con payloads realistas, sin depender de la API de Meta ni de una DB.
+
 ## [1.3.3] - 2026-10-22
 
 ### Fixed

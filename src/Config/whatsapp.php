@@ -149,7 +149,7 @@ return [
                 'received' => \Scriptdevelop\WhatsappManager\Events\MediaMessageReceived::class,
             ],
             'message' => [
-                'deleted' => \Scriptdevelop\WhatsappManager\Events\MessageDeleted::class, //Aun no se implementa
+                'deleted' => \Scriptdevelop\WhatsappManager\Events\MessageDeleted::class,
                 /**
                  * Se dispara cuando se envía al webhook mensaje de entregado de tipo message, recibe como parámetro el objeto de mensaje
                  */
@@ -166,7 +166,7 @@ return [
                  * Se dispara cuando se envía al webhook mensaje de recibido de tipo message, recibe como parámetro el objeto de mensaje
                  */
                 'received' => \Scriptdevelop\WhatsappManager\Events\MessageReceived::class,
-                'sent' => \Scriptdevelop\WhatsappManager\Events\MessageSent::class, //No implementado en webhook
+                'sent' => \Scriptdevelop\WhatsappManager\Events\MessageSent::class,
                 'marketing_opt_out' => \Scriptdevelop\WhatsappManager\Events\WhatsappMarketingOptOut::class,
                 'system' => [
                     'received' => \Scriptdevelop\WhatsappManager\Events\SystemMessageReceived::class,
@@ -200,15 +200,17 @@ return [
             ],
         ],
         'phone_number' => [
-            'updated' => \Scriptdevelop\WhatsappManager\Events\PhoneNumberStatusUpdated::class, //Aun no se implementa
+            'updated' => \Scriptdevelop\WhatsappManager\Events\PhoneNumberStatusUpdated::class,
             'name_updated' => \Scriptdevelop\WhatsappManager\Events\PhoneNumberNameUpdated::class,
             'quality_updated' => \Scriptdevelop\WhatsappManager\Events\PhoneNumberQualityUpdated::class,
         ],
         'template' => [
-            'approved' => \Scriptdevelop\WhatsappManager\Events\TemplateApproved::class, //Aun no se implementa
-            'created' => \Scriptdevelop\WhatsappManager\Events\TemplateCreated::class, //Aun no se implementa
-            'sent' => \Scriptdevelop\WhatsappManager\Events\TemplateMessageSent::class, //Aun no se implementa
-            'rejected' => \Scriptdevelop\WhatsappManager\Events\TemplateRejected::class, //Aun no se implementa
+            'approved' => \Scriptdevelop\WhatsappManager\Events\TemplateApproved::class,
+            'created' => \Scriptdevelop\WhatsappManager\Events\TemplateCreated::class,
+            'sent' => \Scriptdevelop\WhatsappManager\Events\TemplateMessageSent::class,
+            'rejected' => \Scriptdevelop\WhatsappManager\Events\TemplateRejected::class,
+            'quality_updated' => \Scriptdevelop\WhatsappManager\Events\TemplateQualityUpdated::class,
+            'components_updated' => \Scriptdevelop\WhatsappManager\Events\TemplateComponentsUpdated::class,
         ],
         'coexistence' => [
             'history_synced' => \ScriptDevelop\WhatsappManager\Events\CoexistenceHistorySynced::class,
@@ -292,9 +294,9 @@ return [
             // 'business_capability_update',                            // Actualización de capacidades de negocio
             // 'business_status_update',                                // Actualización de estado de negocio
             // 'calls',                                                 // Llamadas
-            // 'flows',                                                 // Flujos de WhatsApp
+            'flows',                                                    // Flujos de WhatsApp (estado + performance)
             // 'history',                                               // Historial
-            // 'message_template_components_update',                    // Actualización de componentes de plantilla de mensaje
+            'message_template_components_update',                        // Actualización de componentes de plantilla de mensaje
             'message_template_quality_update',                          // Actualización de calidad de plantilla de mensaje
             'message_template_status_update',                           // Actualización de estado de plantilla de mensaje
             'messages',                                                 // Mensajes
@@ -302,6 +304,7 @@ return [
             // 'payment_configuration_update',                          // Actualización de configuración de pagos
             // 'phone_number_name_update',                              // Actualización de nombre de número de teléfono
             'phone_number_quality_update',                              // Actualización de calidad de número de teléfono
+            // 'phone_number_status_update',                            // On-Premises/proveedores; no documentado para Cloud API. El webhook se procesa si llega.
             // 'security',                                              // Seguridad
             // 'smb_app_state_sync',                                    // Sincronización de estado de la app SMB
             // 'smb_message_echoes',                                    // Eco de mensajes SMB

@@ -198,6 +198,11 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             return;
         }
 
+        if ($field === 'phone_number_status_update') {
+            $this->handlePhoneNumberStatusUpdate($value);
+            return;
+        }
+
         if ($field === 'phone_number_quality_update') {
             $this->handlePhoneNumberQualityUpdate($value);
             return;
@@ -205,6 +210,16 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
 
         if ($field === 'message_template' or $field === 'message_template_status_update') {
             $this->handleTemplateEvent($payload, $field, $value);
+            return;
+        }
+
+        if ($field === 'message_template_quality_update') {
+            $this->handleTemplateQualityUpdate($value);
+            return;
+        }
+
+        if ($field === 'message_template_components_update') {
+            $this->handleTemplateComponentsUpdate($value);
             return;
         }
 
@@ -1311,6 +1326,17 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
     }
 
     /**
+     * Resuelve el mensaje local afectado por un status webhook.
+     *
+     * Método protegido para permitir tests sin DB y para que aplicaciones
+     * puedan sustituir la resolución si almacenan los wamid en otra tabla.
+     */
+    protected function findMessageForStatus(string $waId): ?Model
+    {
+        return WhatsappModelResolver::message()->where('wa_id', $waId)->first();
+    }
+
+    /**
      * @param array $status   El objeto de estado del webhook (statuses[0])
      * @param array $contacts Array opcional de contacts del webhook (presente en delivered/read)
      */
@@ -1324,7 +1350,7 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             return;
         }
 
-        $messageRecord = WhatsappModelResolver::message()->where('wa_id', $messageId)->first();
+        $messageRecord = $this->findMessageForStatus($messageId);
 
         if (!$messageRecord) {
             Log::channel('whatsapp')->warning('Message record not found for status update.', ['wa_id' => $messageId]);
@@ -1342,12 +1368,22 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         }
 
         switch ($statusValue) {
+            case 'sent':
+                $this->fireMessageSent($messageUpdated);
+                break;
+
             case 'delivered':
                 $this->fireMessageDelivered($messageUpdated);
                 break;
 
             case 'read':
                 $this->fireMessageRead($messageUpdated);
+                break;
+
+            case 'deleted':
+                // Cloud API no envía este estado; la On-Premises API sí lo documenta.
+                // No se persiste en `status` porque la columna es un enum sin `deleted`.
+                $this->fireMessageDeleted($messageUpdated);
                 break;
 
             case 'failed':
@@ -1586,7 +1622,11 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             $statusValue = $effectiveDbStatus;
         }
 
-        $updateData['status']  = $statusValue;
+        // `deleted`/`warning` sólo existen en la On-Premises API y la columna
+        // `status` es un enum que no los admite; el evento se emite igual.
+        if (in_array($statusValue, ['sent', 'delivered', 'read', 'failed'], true)) {
+            $updateData['status'] = $statusValue;
+        }
 
         // Guardar BSUID del destinatario si llega en el status (presente en delivered/read cuando se envió por BSUID)
         if (!empty($status['recipient_user_id'])) {
@@ -1858,6 +1898,7 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         if ($field === 'message_template_status_update') {
             Log::channel('whatsapp')->info("Get template ID: {$templateId}", $templateData);
             //Usar la API para obtener el template, esto puede suceder por que se creó ó editó la plantilla desde el portal de Whatsapp Business, esto hará que en cuanto se aprueve o rechace se emita un webhook que esta clase procesará.
+            $this->fireTemplateStatusEvent($newStatus, null, $templateId, $templateData);
             $this->findTemplateAPI($payload);
 
             return;
@@ -1871,6 +1912,7 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             Log::channel('whatsapp')->warning("Template not found: {$templateId}");
 
             //Usar la API para obtener el template, esto puede suceder por que se creó ó editó la plantilla desde el portal de Whatsapp Business, esto hará que en cuanto se aprueve o rechace se emita un webhook que esta clase procesará.
+            $this->fireTemplateStatusEvent($newStatus, null, $templateId, $templateData);
             $this->findTemplateAPI($payload);
 
             return;
@@ -1909,6 +1951,124 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             'template_id' => $template->template_id,
             'reason' => $reason
         ]);
+
+        $this->fireTemplateStatusEvent($newStatus, $template, $templateId, $templateData);
+    }
+
+    /**
+     * Emite el evento configurado para un cambio de estado de plantilla.
+     * Se llama tanto si la plantilla existe localmente como si sólo llega el ID.
+     */
+    protected function fireTemplateStatusEvent(string $status, ?Model $template, string $waTemplateId, array $payload): void
+    {
+        $eventKey = match ($status) {
+            'APPROVED' => 'approved',
+            'REJECTED' => 'rejected',
+            'CREATE'   => 'created',
+            default    => null,
+        };
+
+        if ($eventKey === null) {
+            return;
+        }
+
+        $event = config("whatsapp.events.template.{$eventKey}");
+
+        if ($event) {
+            $this->dispatchConfiguredEvent($event, [
+                'template'       => $template,
+                'wa_template_id' => $waTemplateId,
+                'status'         => $status,
+                'reason'         => $payload['reason'] ?? null,
+                'payload'        => $payload,
+            ]);
+        }
+    }
+
+    /**
+     * Procesa `message_template_quality_update`.
+     *
+     * Payload documentado: message_template_id, message_template_name,
+     * message_template_language, previous_quality_score y new_quality_score.
+     * No hay columna local de calidad; el evento lleva el payload completo.
+     */
+    protected function handleTemplateQualityUpdate(array $value): void
+    {
+        $templateId = $value['message_template_id'] ?? null;
+
+        if (empty($templateId)) {
+            Log::channel('whatsapp')->warning('⚠️ [TEMPLATE_QUALITY_UPDATE] Missing message_template_id', $value);
+            return;
+        }
+
+        Log::channel('whatsapp')->info('📊 [TEMPLATE_QUALITY_UPDATE] Template quality changed', [
+            'message_template_id' => $templateId,
+            'previous_quality_score' => $value['previous_quality_score'] ?? null,
+            'new_quality_score' => $value['new_quality_score'] ?? null,
+        ]);
+
+        $this->fireTemplateQualityUpdated((string) $templateId, $value);
+    }
+
+    /**
+     * Procesa `message_template_components_update`.
+     *
+     * Payload documentado: message_template_id, name, language, body/header/footer
+     * y buttons. El evento lleva el payload completo para que la app sincronice.
+     */
+    protected function handleTemplateComponentsUpdate(array $value): void
+    {
+        $templateId = $value['message_template_id'] ?? null;
+
+        if (empty($templateId)) {
+            Log::channel('whatsapp')->warning('⚠️ [TEMPLATE_COMPONENTS_UPDATE] Missing message_template_id', $value);
+            return;
+        }
+
+        Log::channel('whatsapp')->info('🧩 [TEMPLATE_COMPONENTS_UPDATE] Template components changed', [
+            'message_template_id' => $templateId,
+            'message_template_name' => $value['message_template_name'] ?? null,
+        ]);
+
+        $this->fireTemplateComponentsUpdated((string) $templateId, $value);
+    }
+
+    protected function fireTemplateQualityUpdated(string $waTemplateId, array $payload): void
+    {
+        $event = config('whatsapp.events.template.quality_updated');
+
+        if ($event) {
+            $this->dispatchConfiguredEvent($event, [
+                'wa_template_id'      => $waTemplateId,
+                'message_template_id' => $payload['message_template_id'] ?? null,
+                'name'                => $payload['message_template_name'] ?? null,
+                'language'            => $payload['message_template_language'] ?? null,
+                'previous_quality_score' => $payload['previous_quality_score'] ?? null,
+                'new_quality_score'   => $payload['new_quality_score'] ?? null,
+                'payload'             => $payload,
+            ]);
+        }
+    }
+
+    protected function fireTemplateComponentsUpdated(string $waTemplateId, array $payload): void
+    {
+        $event = config('whatsapp.events.template.components_updated');
+
+        if ($event) {
+            $this->dispatchConfiguredEvent($event, [
+                'wa_template_id'      => $waTemplateId,
+                'message_template_id' => $payload['message_template_id'] ?? null,
+                'name'                => $payload['message_template_name'] ?? null,
+                'language'            => $payload['message_template_language'] ?? null,
+                'components'          => [
+                    'title'   => $payload['message_template_title'] ?? null,
+                    'body'    => $payload['message_template_element'] ?? null,
+                    'footer'  => $payload['message_template_footer'] ?? null,
+                    'buttons' => $payload['message_template_buttons'] ?? [],
+                ],
+                'payload'             => $payload,
+            ]);
+        }
     }
 
     /**
@@ -2094,6 +2254,8 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
             'template_id' => $template->template_id,
             'status' => $status
         ]);
+
+        $this->fireTemplateStatusEvent('CREATE', $template, $templateId, $templateData);
     }
 
     protected function handleTemplateUpdate(array $templateData): void
@@ -2192,6 +2354,97 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
 
         // 6. Disparar evento (opcional pero recomendado)
         $this->firePhoneNumberQualityUpdated($phoneNumber, $value);
+    }
+
+    /**
+     * Procesa una actualización de estado de un número de teléfono.
+     *
+     * La Cloud API no documenta hoy este campo; la On-Premises API y algunos
+     * proveedores compatibles sí lo envían. Se acepta el payload plano
+     * documentado ({display_phone_number, event|new_status, phone_number_id})
+     * y también la variante anidada en `number` para no perder el evento.
+     */
+    protected function handlePhoneNumberStatusUpdate(array $value): void
+    {
+        Log::channel('whatsapp')->info('📞 [PHONE_NUMBER_STATUS_UPDATE] Processing phone status update', $value);
+
+        $displayPhoneNumber = $value['display_phone_number'] ?? data_get($value, 'number.display_phone_number');
+        $apiPhoneNumberId   = $value['phone_number_id'] ?? data_get($value, 'number.id');
+
+        $rawStatus = $value['new_status']
+            ?? $value['event']
+            ?? $value['connection_status']
+            ?? $value['status']
+            ?? data_get($value, 'quality_status.code');
+
+        if (is_array($rawStatus)) {
+            $rawStatus = $rawStatus['code'] ?? $rawStatus['description'] ?? null;
+        }
+
+        $newStatus = is_string($rawStatus) && $rawStatus !== ''
+            ? Str::upper($rawStatus)
+            : null;
+
+        if (!$displayPhoneNumber && !$apiPhoneNumberId) {
+            Log::channel('whatsapp')->warning('⚠️ [PHONE_NUMBER_STATUS_UPDATE] Missing display_phone_number and phone_number_id', $value);
+            return;
+        }
+
+        $qualityRating = $value['quality_rating']
+            ?? data_get($value, 'number.quality_rating.code')
+            ?? data_get($value, 'number.business_manager.quality_rating');
+
+        if (is_array($qualityRating)) {
+            $qualityRating = $qualityRating['code'] ?? null;
+        }
+
+        $phoneNumber = $this->findPhoneNumberForWebhookStatus($displayPhoneNumber, $apiPhoneNumberId);
+
+        if ($phoneNumber && $phoneNumber->exists) {
+            $updateData = ['meta_status_checked_at' => now()];
+
+            if ($newStatus) {
+                $updateData['meta_connection_status'] = $newStatus;
+            }
+
+            if (is_string($qualityRating) && $qualityRating !== '') {
+                $updateData['quality_rating'] = Str::upper($qualityRating);
+            }
+
+            $phoneNumber->update($updateData);
+        }
+
+        Log::channel('whatsapp')->info('✅ [PHONE_NUMBER_STATUS_UPDATE] Phone status processed', [
+            'phone_number_id'      => $phoneNumber?->phone_number_id,
+            'display_phone_number' => $displayPhoneNumber,
+            'new_status'           => $newStatus,
+        ]);
+
+        $this->firePhoneNumberStatusUpdated($phoneNumber, $value, $newStatus);
+    }
+
+    /**
+     * Resuelve el número por API ID (preferido) o por número visible.
+     */
+    protected function findPhoneNumberForWebhookStatus(?string $displayPhoneNumber, ?string $apiPhoneNumberId): ?Model
+    {
+        if ($apiPhoneNumberId) {
+            $phone = WhatsappModelResolver::phone_number()
+                ->where('api_phone_number_id', $apiPhoneNumberId)
+                ->first();
+
+            if ($phone) {
+                return $phone;
+            }
+        }
+
+        if ($displayPhoneNumber) {
+            return WhatsappModelResolver::phone_number()
+                ->where('display_phone_number', $displayPhoneNumber)
+                ->first();
+        }
+
+        return null;
     }
 
     protected function handleTemplateDeletion(array $templateData): void
@@ -2359,12 +2612,64 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         ]));
     }
 
+    /**
+     * Despacha una clase de evento configurada.
+     *
+     * El paquete declaró históricamente eventos con el prefijo
+     * `Scriptdevelop\` mientras composer.json usa `ScriptDevelop\`. El
+     * autoloader PSR-4 es case-sensitive, así que si la clase configurada no
+     * existe se intenta la variante canónica antes de descartar el evento.
+     */
+    protected function dispatchConfiguredEvent(?string $eventClass, array $data): bool
+    {
+        if (!$eventClass) {
+            return false;
+        }
+
+        $eventClass = ltrim($eventClass, '\\');
+
+        if (!class_exists($eventClass) && str_starts_with($eventClass, 'Scriptdevelop\\')) {
+            $canonical = 'ScriptDevelop\\' . substr($eventClass, strlen('Scriptdevelop\\'));
+
+            if (class_exists($canonical)) {
+                $eventClass = $canonical;
+            }
+        }
+
+        if (!class_exists($eventClass)) {
+            Log::channel('whatsapp')->warning('Event class not found for webhook.', [
+                'event' => $eventClass,
+            ]);
+            return false;
+        }
+
+        event(new $eventClass($data));
+
+        return true;
+    }
+
     protected function fireMessageDelivered($messageUpdated)
     {
         $event = config('whatsapp.events.messages.message.delivered');
         event(new $event([
             'message' => $messageUpdated,
         ]));
+    }
+
+    protected function fireMessageSent($messageUpdated)
+    {
+        $this->dispatchConfiguredEvent(
+            config('whatsapp.events.messages.message.sent'),
+            ['message' => $messageUpdated]
+        );
+    }
+
+    protected function fireMessageDeleted($messageUpdated)
+    {
+        $this->dispatchConfiguredEvent(
+            config('whatsapp.events.messages.message.deleted'),
+            ['message' => $messageUpdated]
+        );
     }
 
     protected function fireMessageRead($messageUpdated)
@@ -4632,6 +4937,21 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
                 'payload' => $payload,
             ]));
         }
+    }
+
+    protected function firePhoneNumberStatusUpdated(?Model $phoneNumber, array $payload, ?string $newStatus = null): void
+    {
+        $this->dispatchConfiguredEvent(
+            config('whatsapp.events.phone_number.updated'),
+            [
+                'phone_number'    => $phoneNumber,
+                'new_status'      => $newStatus,
+                'previous_status' => $payload['old_status'] ?? null,
+                'event_type'      => $payload['event'] ?? null,
+                'quality_rating'  => $payload['quality_rating'] ?? null,
+                'payload'         => $payload,
+            ]
+        );
     }
 
     /**
