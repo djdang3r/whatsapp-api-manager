@@ -281,6 +281,11 @@ return [
         // En apps que ya exponen /api/v1/webhooks/whatsapp conviene apagarla.
         'routes_enabled' => env('WHATSAPP_WEBHOOK_ROUTES', true),
 
+        // TTL en segundos del dedupe de status duplicados (mensaje + estado).
+        // Meta reintenta webhooks; se recuerda cada transición procesada durante
+        // este lapso. Valores <= 0 usan el default y se acotan a 7 días.
+        'status_dedupe_ttl' => (int) env('WHATSAPP_WEBHOOK_STATUS_DEDUPE_TTL', 86400),
+
         // Procesador personalizado para webhooks (valor por defecto)
         'processor' => \ScriptDevelop\WhatsappManager\Services\WebhookProcessors\BaseWebhookProcessor::class,
 

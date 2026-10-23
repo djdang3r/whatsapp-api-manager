@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-10-23
+
+### Added
+- Dedupe en caché para webhooks de status duplicados: la clave es `message id + status` (con el código de error en `failed`, para distinguir fallos como 131042 vs 131050). TTL configurable con `whatsapp.webhook.status_dedupe_ttl` / `WHATSAPP_WEBHOOK_STATUS_DEDUPE_TTL` (default 86400 s, acotado a 7 días).
+- `WebhookIdempotencyTest` cubre replay de `delivered`, secuencia `sent` → `delivered`, payloads malformados, multi-entry/multi-message, fallo transitorio, caída de caché y ausencia de PII/firma en el log del dedupe.
+
+### Fixed
+- Los eventos `MessageDelivered`, `MessageRead` y `MessageFailed` ahora se resuelven con `dispatchConfiguredEvent`, igual que `sent`/`deleted`, para tolerar el casing histórico `Scriptdevelop` vs `ScriptDevelop`.
+- Un fallo transitorio durante el procesamiento de un status ya no se marca como procesado: la clave de dedupe se escribe solo después de que el handler termina sin excepción, preservando el reintento de Meta.
+- Si la caché falla al consultar o escribir la clave, el evento se procesa igual (fail-open), priorizando no perder entregas/lecturas sobre evitar un duplicado.
+
 ## [1.3.4] - 2026-10-23
 
 ### Added

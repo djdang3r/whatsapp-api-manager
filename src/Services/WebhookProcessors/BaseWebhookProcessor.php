@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -278,12 +279,14 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
         }
 
         // Un mismo value puede traer varios status (sent, delivered, read, failed).
+        // `processStatusEvent` centraliza el dedupe por mensaje+estado para que un
+        // reintento de Meta no vuelva a emitir el evento.
         foreach (($value['statuses'] ?? []) as $status) {
             if (!is_array($status)) {
                 continue;
             }
 
-            $this->handleStatusUpdate($status, $value['contacts'] ?? []);
+            $this->processStatusEvent($status, $value['contacts'] ?? []);
         }
     }
 
@@ -1334,6 +1337,118 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
     protected function findMessageForStatus(string $waId): ?Model
     {
         return WhatsappModelResolver::message()->where('wa_id', $waId)->first();
+    }
+
+    /**
+     * Procesa un status aplicando dedupe idempotente por `mensaje + estado`.
+     *
+     * Meta reintenta el mismo webhook ante timeouts/5xx. Sin dedupe, un
+     * `delivered` repetido vuelve a emitir `MessageDelivered` y a ejecutar los
+     * efectos asociados. La clave se marca SOLO después de que el handler
+     * termina sin excepción, de modo que un fallo transitorio de DB/proveedor
+     * conserva el reintento (no se cachea un fallo como éxito).
+     *
+     * Los payloads malformados (sin id o sin status) se delegan al handler,
+     * que ya los ignora con un warning; no se cachean ni se deduplican.
+     */
+    protected function processStatusEvent(array $status, array $contacts = []): void
+    {
+        $dedupeKey = $this->statusDedupeKey($status);
+
+        if ($dedupeKey !== null && $this->isDuplicateStatusEvent($dedupeKey)) {
+            // Solo se registra el fingerprint (hash), nunca el payload, el
+            // cuerpo del mensaje ni la firma del webhook.
+            Log::channel('whatsapp')->debug('Status webhook duplicado ignorado.', [
+                'dedupe_key' => $dedupeKey,
+            ]);
+
+            return;
+        }
+
+        $this->handleStatusUpdate($status, $contacts);
+
+        if ($dedupeKey !== null) {
+            $this->rememberStatusEvent($dedupeKey);
+        }
+    }
+
+    /**
+     * Construye una clave de dedupe estable y sin PII para un status.
+     *
+     * Incluye el código de error en `failed` para no colapsar fallos distintos
+     * del mismo mensaje (por ejemplo 131042 pago vs 131050 opt-out). Distintas
+     * transiciones (`sent` → `delivered` → `read`) comparten mensaje pero no
+     * estado, así que son claves diferentes y ambas se procesan.
+     *
+     * @return string|null null cuando el status no es deduplicable (malformado).
+     */
+    private function statusDedupeKey(array $status): ?string
+    {
+        $messageId   = $status['id'] ?? null;
+        $statusValue = $status['status'] ?? null;
+
+        if (!is_scalar($messageId) || (string) $messageId === '') {
+            return null;
+        }
+
+        if (!is_scalar($statusValue) || (string) $statusValue === '') {
+            return null;
+        }
+
+        $parts = [(string) $messageId, (string) $statusValue];
+
+        if ((string) $statusValue === 'failed') {
+            $errorCode = $status['errors'][0]['code'] ?? null;
+            if (is_scalar($errorCode) && (string) $errorCode !== '') {
+                $parts[] = (string) $errorCode;
+            }
+        }
+
+        return 'whatsapp:webhook:status:' . hash('sha256', implode('|', $parts));
+    }
+
+    /**
+     * TTL configurable del dedupe, acotado para que la caché no crezca sin
+     * límite si la aplicación configura un valor absurdo.
+     */
+    private function statusDedupeTtl(): int
+    {
+        $configured = (int) config('whatsapp.webhook.status_dedupe_ttl', 86400);
+
+        if ($configured <= 0) {
+            $configured = 86400;
+        }
+
+        return min($configured, 604800);
+    }
+
+    /**
+     * Si la caché falla se procesa el evento (fail-open): es preferible un
+     * evento duplicado a perder una entrega/lectura. El warning no incluye
+     * payloads ni secretos.
+     */
+    private function isDuplicateStatusEvent(string $dedupeKey): bool
+    {
+        try {
+            return Cache::store()->has($dedupeKey);
+        } catch (\Throwable $e) {
+            Log::channel('whatsapp')->warning('No se pudo consultar el dedupe de status; se procesa el evento.', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    private function rememberStatusEvent(string $dedupeKey): void
+    {
+        try {
+            Cache::store()->put($dedupeKey, true, $this->statusDedupeTtl());
+        } catch (\Throwable $e) {
+            Log::channel('whatsapp')->warning('No se pudo guardar el dedupe de status; el evento ya fue procesado.', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -2650,10 +2765,10 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
 
     protected function fireMessageDelivered($messageUpdated)
     {
-        $event = config('whatsapp.events.messages.message.delivered');
-        event(new $event([
-            'message' => $messageUpdated,
-        ]));
+        $this->dispatchConfiguredEvent(
+            config('whatsapp.events.messages.message.delivered'),
+            ['message' => $messageUpdated]
+        );
     }
 
     protected function fireMessageSent($messageUpdated)
@@ -2674,18 +2789,18 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
 
     protected function fireMessageRead($messageUpdated)
     {
-        $event = config('whatsapp.events.messages.message.read');
-        event(new $event([
-            'message' => $messageUpdated,
-        ]));
+        $this->dispatchConfiguredEvent(
+            config('whatsapp.events.messages.message.read'),
+            ['message' => $messageUpdated]
+        );
     }
 
     protected function fireMessageFailed($messageUpdated)
     {
-        $event = config('whatsapp.events.messages.message.failed');
-        event(new $event([
-            'message' => $messageUpdated,
-        ]));
+        $this->dispatchConfiguredEvent(
+            config('whatsapp.events.messages.message.failed'),
+            ['message' => $messageUpdated]
+        );
     }
 
     protected function fireSystemMessageReceived($contactRecord, $messageRecord)
