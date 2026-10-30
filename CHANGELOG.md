@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-10-30
+
+### Added
+- `MessageDispatcherService::sendProductCarouselMessage()`: carrusel interactivo de productos del catálogo (`interactive.type = carousel`, cards `type = product`) con 2–10 `product_retailer_id`, cuerpo obligatorio y el `catalog_id` del número emisor. Meta no admite header/footer/buttons en este tipo.
+
 ## [1.3.5] - 2026-10-23
 
 ### Added

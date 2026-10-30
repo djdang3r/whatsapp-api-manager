@@ -3643,6 +3643,89 @@ class MessageDispatcherService
     }
 
     /**
+     * Envía un carrusel interactivo de productos del catálogo.
+     *
+     * Meta exige entre 2 y 10 cards, cada una con `type = product` y el mismo
+     * `catalog_id`; no admite header, footer ni botones en este mensaje.
+     *
+     * @param  array<int, string>  $retailerIds
+     */
+    public function sendProductCarouselMessage(
+        string $phoneNumberId,
+        string $countryCode,
+        string $phoneNumber,
+        array $retailerIds,
+        string $body,
+        ?string $contextMessageId = null
+    ): Model {
+        $retailerIds = array_values(array_unique(array_filter(array_map(
+            fn ($id) => trim((string) $id),
+            $retailerIds,
+        ))));
+
+        if (count($retailerIds) < 2 || count($retailerIds) > 10) {
+            throw new \InvalidArgumentException('El carrusel de productos requiere entre 2 y 10 productos.');
+        }
+
+        if (mb_strlen($body) > 1024) {
+            throw new \InvalidArgumentException('El cuerpo del carrusel no puede superar 1024 caracteres.');
+        }
+
+        Log::channel('whatsapp')->info('Iniciando envío de carrusel de productos.', [
+            'phoneNumberId' => $phoneNumberId,
+            'countryCode' => $countryCode,
+            'phoneNumber' => $phoneNumber,
+            'retailerIds' => $retailerIds,
+            'body' => $body,
+            'contextMessageId' => $contextMessageId,
+        ]);
+
+        $fullPhoneNumber = CountryCodes::normalizeInternationalPhone($countryCode, $phoneNumber)['fullPhoneNumber'];
+        $phoneNumberModel = $this->validatePhoneNumber($phoneNumberId);
+
+        if (!$phoneNumberModel->catalog_id) {
+            throw new \RuntimeException('El número telefónico no tiene un catálogo asociado.');
+        }
+
+        $contact = $this->resolveContact($countryCode, $phoneNumber);
+
+        $message = WhatsappModelResolver::message()->create([
+            'whatsapp_phone_id' => $phoneNumberModel->phone_number_id,
+            'contact_id' => $contact->contact_id,
+            'message_from' => preg_replace('/[\D+]/', '', $phoneNumberModel->display_phone_number),
+            'message_to' => $fullPhoneNumber,
+            'message_type' => 'INTERACTIVE',
+            'json' => json_encode([
+                'sub_type' => 'product_carousel',
+                'body' => $body,
+                'retailer_ids' => $retailerIds,
+            ]),
+            'message_method' => 'OUTPUT',
+            'status' => MessageStatus::PENDING,
+            'message_context_id' => $contextMessageId ? $this->getContextMessageId($contextMessageId) : null,
+        ]);
+
+        try {
+            $response = $this->sendViaApi($phoneNumberModel, $fullPhoneNumber, 'interactive', [
+                'interactive_type' => 'carousel',
+                'body' => $body,
+                'retailer_ids' => $retailerIds,
+                'catalog_id' => $phoneNumberModel->catalog_id,
+            ], $contextMessageId);
+
+            Log::channel('whatsapp')->info('Respuesta recibida de API WhatsApp para carrusel de productos.', ['response' => $response]);
+
+            return $this->handleSuccess($message, $response);
+        } catch (WhatsappApiException $e) {
+            Log::channel('whatsapp')->error('Error al enviar carrusel de productos.', [
+                'exception' => $e,
+            ]);
+
+            return $this->handleError($message, $e);
+        }
+    }
+
+    /**
      * Envía un mensaje con el catálogo completo
      *
      * @param string $phoneNumberId ID del número telefónico registrado
@@ -4230,6 +4313,27 @@ class MessageDispatcherService
                         'action' => [
                             'name' => 'send_location'
                         ]
+                    ];
+                }
+                elseif ($interactiveType === 'carousel') {
+                    $catalogId = $parameters['catalog_id'] ?? $phone->catalog_id;
+                    $cards = [];
+
+                    foreach (array_values($parameters['retailer_ids'] ?? []) as $index => $retailerId) {
+                        $cards[] = [
+                            'card_index' => $index,
+                            'type' => 'product',
+                            'action' => [
+                                'product_retailer_id' => $retailerId,
+                                'catalog_id' => $catalogId,
+                            ],
+                        ];
+                    }
+
+                    $interactiveData = [
+                        'type' => 'carousel',
+                        'body' => ['text' => $parameters['body']],
+                        'action' => ['cards' => $cards],
                     ];
                 }
                 elseif ($interactiveType === 'product') {
