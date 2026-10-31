@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-10-30
+
+### Fixed
+- `sendMultiProductMessage()` ahora garantiza un `interactive.header` no vacío (máx. 60 caracteres). Meta exige ese campo en `product_list` y respondía `#131009 The parameter interactive['header'] is required` cuando el caller lo omitía.
+
 ## [1.3.6] - 2026-10-30
 
 ### Added

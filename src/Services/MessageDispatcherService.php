@@ -3562,6 +3562,15 @@ class MessageDispatcherService
         ?string $footer = null,
         ?string $contextMessageId = null
     ): Model {
+        // Meta exige `interactive.header` en `product_list`; si el caller no lo
+        // manda, el request se rechaza con #131009 y un detalle engañoso. El
+        // paquete garantiza un header válido en vez de omitirlo.
+        $header = trim((string) $header);
+        if ($header === '') {
+            $header = 'Productos';
+        }
+        $header = mb_substr($header, 0, 60);
+
         Log::channel('whatsapp')->info('Iniciando envío de mensaje con múltiples productos.', [
             'phoneNumberId' => $phoneNumberId,
             'countryCode' => $countryCode,
