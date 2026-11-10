@@ -129,12 +129,14 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
                 continue;
             }
 
+            $entryId = is_array($entry) ? trim((string) ($entry['id'] ?? '')) : '';
+
             foreach ($changes as $change) {
                 if (!is_array($change)) {
                     continue;
                 }
 
-                $this->processChange($payload, $change);
+                $this->processChange($payload, $change, $entryId !== '' ? $entryId : null);
                 $processedChanges++;
             }
         }
@@ -153,7 +155,7 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
      * No devuelve Response para que processIncomingMessage pueda recorrer
      * todos los cambios del lote sin cortar el resto.
      */
-    protected function processChange(array $payload, array $change): void
+    protected function processChange(array $payload, array $change, ?string $entryId = null): void
     {
         $value = $change['value'] ?? null;
         $field = $change['field'] ?? null;
@@ -165,6 +167,10 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
                 'field' => $field,
                 'change' => $change,
             ]);
+            return;
+        }
+
+        if (! $this->phoneBelongsToEntry($value, $entryId)) {
             return;
         }
 
@@ -288,6 +294,38 @@ class BaseWebhookProcessor implements WebhookProcessorInterface
 
             $this->processStatusEvent($status, $value['contacts'] ?? []);
         }
+    }
+
+    protected function phoneBelongsToEntry(array $value, ?string $entryId): bool
+    {
+        if ($entryId === null || $entryId === '') {
+            return true;
+        }
+
+        $apiPhoneNumberId = trim((string) ($value['metadata']['phone_number_id'] ?? ''));
+
+        if ($apiPhoneNumberId === '') {
+            return true;
+        }
+
+        $phone = WhatsappModelResolver::phone_number()
+            ->where('api_phone_number_id', $apiPhoneNumberId)
+            ->first();
+
+        if ($phone === null) {
+            return true;
+        }
+
+        if ((string) $phone->whatsapp_business_account_id !== $entryId) {
+            Log::channel('whatsapp')->warning('WhatsApp phone/WABA mismatch in webhook; entry rejected.', [
+                'waba_id' => $entryId,
+                'api_phone_number_id' => $apiPhoneNumberId,
+            ]);
+
+            return false;
+        }
+
+        return true;
     }
 
     protected function handleIncomingMessage(array $message, ?array $contact, ?array $metadata): void

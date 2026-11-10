@@ -166,6 +166,62 @@ class WebhookBatchProcessingTest extends TestCase
         $this->assertSame(['m-1'], $processor->incomingIds);
     }
 
+    public function test_processes_message_when_phone_belongs_to_entry_waba(): void
+    {
+        $this->app['config']->set('whatsapp.models.phone_number', FakeWebhookPhone::class);
+        $processor = $this->wabaRecordingProcessor();
+
+        $response = $processor->processIncomingMessage(Request::create('/whatsapp-webhook', 'POST', [
+            'entry' => [[
+                'id' => 'waba-a',
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'metadata' => ['phone_number_id' => 'phone-1'],
+                        'messages' => [['id' => 'm-1', 'type' => 'text']],
+                    ],
+                ]],
+            ]],
+        ]));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame(['m-1'], $processor->incomingIds);
+    }
+
+    public function test_rejects_message_when_phone_waba_does_not_match_entry(): void
+    {
+        $this->app['config']->set('whatsapp.models.phone_number', FakeWebhookPhone::class);
+        $processor = $this->wabaRecordingProcessor();
+
+        $response = $processor->processIncomingMessage(Request::create('/whatsapp-webhook', 'POST', [
+            'entry' => [[
+                'id' => 'waba-b',
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'metadata' => ['phone_number_id' => 'phone-1'],
+                        'messages' => [['id' => 'm-1', 'type' => 'text']],
+                    ],
+                ]],
+            ]],
+        ]));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame([], $processor->incomingIds);
+    }
+
+    private function wabaRecordingProcessor(): BaseWebhookProcessor
+    {
+        return new class extends BaseWebhookProcessor {
+            public array $incomingIds = [];
+
+            protected function handleIncomingMessage(array $message, ?array $contact, ?array $metadata): void
+            {
+                $this->incomingIds[] = $message['id'];
+            }
+        };
+    }
+
     private function recordingProcessor(): BaseWebhookProcessor
     {
         return new class extends BaseWebhookProcessor {
@@ -183,5 +239,27 @@ class WebhookBatchProcessingTest extends TestCase
                 $this->statusIds[] = $status['id'];
             }
         };
+    }
+}
+
+
+class FakeWebhookPhone
+{
+    public static function query(): FakeWebhookPhoneQuery
+    {
+        return new FakeWebhookPhoneQuery();
+    }
+}
+
+class FakeWebhookPhoneQuery
+{
+    public function where(string $column, mixed $value): self
+    {
+        return $this;
+    }
+
+    public function first(): ?object
+    {
+        return (object) ['whatsapp_business_account_id' => 'waba-a'];
     }
 }

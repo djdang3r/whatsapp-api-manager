@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-10
+
+### Added
+- Validación de aislamiento WABA↔teléfono en webhooks: cada `entry.id` se propaga al procesamiento y un mensaje/estado se descarta si el `phone_number_id` pertenece a otra WABA.
+- Tests `WebhookBatchProcessingTest` para phone/WABA válido y mismatch.
+
+### Fixed
+- Un webhook de una WABA con un `phone_number_id` de otra WABA ya no puede procesarse como si perteneciera al tenant equivocado.
+- El rechazo deja un warning sin payload ni PII.
+
+
 ## [1.3.7] - 2026-10-30
 
 ### Fixed
