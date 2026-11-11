@@ -51,6 +51,9 @@ class TemplateBuilder
     /** @var string|null Ruta relativa del preview en el disco público. */
     protected ?string $headerMediaPreviewPath = null;
 
+    /** @var bool Indica que esta edición intentó reemplazar el media. */
+    protected bool $headerMediaPreviewAttempted = false;
+
     /**
      * Constructor de la clase
      *
@@ -381,6 +384,8 @@ return $this;
      */
     protected function storeHeaderMediaPreview(string $sourcePath): void
     {
+        $this->headerMediaPreviewAttempted = true;
+
         try {
             if (! is_file($sourcePath)) {
                 return;
@@ -1360,6 +1365,7 @@ return $this;
             $this->buttonCount = 0;
             $this->headerMediaPreviewPath = null;
             $this->headerMediaPreviewUrl = null;
+            $this->headerMediaPreviewAttempted = false;
 
             return $template;
         } catch (\GuzzleHttp\Exception\ClientException $e) {

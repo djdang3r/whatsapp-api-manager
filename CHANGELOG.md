@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-11
+
+### Fixed
+- Si el reemplazo de media no puede guardar el preview local, se elimina la referencia anterior en lugar de mostrar una imagen vieja que ya no coincide con Meta.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added

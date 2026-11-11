@@ -289,6 +289,11 @@ class TemplateEditor extends TemplateBuilder
             }
 
             if ($this->headerMediaPreviewUrl === null) {
+                if ($this->headerMediaPreviewAttempted) {
+                    $this->deleteTemplatePreview($this->template->file);
+                    $this->template->update(['file' => null]);
+                }
+
                 return;
             }
 
@@ -327,6 +332,7 @@ class TemplateEditor extends TemplateBuilder
         $this->buttonCount = 0;
         $this->headerMediaPreviewPath = null;
         $this->headerMediaPreviewUrl = null;
+        $this->headerMediaPreviewAttempted = false;
     }
 
     /*public function setParameterFormat(string $format): self
