@@ -200,16 +200,39 @@ class TemplateMessageBuilder
             ];
         }
         elseif ($type === 'LOCATION') {
-            // Location no lleva parámetros, pero validamos que no se pase contenido
-            if (!empty($content)) {
+            if (! is_array($content)) {
                 throw new InvalidArgumentException(
-                    "El header de tipo LOCATION no debe tener contenido"
+                    'El header LOCATION requiere latitude, longitude, name y address.'
                 );
             }
 
-            // Location se representa con un array vacío
+            $latitude = trim((string) ($content['latitude'] ?? ''));
+            $longitude = trim((string) ($content['longitude'] ?? ''));
+            $name = trim((string) ($content['name'] ?? ''));
+            $address = trim((string) ($content['address'] ?? ''));
+
+            if ($latitude === '' || $longitude === '') {
+                throw new InvalidArgumentException(
+                    'El header LOCATION requiere latitude y longitude.'
+                );
+            }
+
+            if (! is_numeric($latitude) || ! is_numeric($longitude)
+                || (float) $latitude < -90 || (float) $latitude > 90
+                || (float) $longitude < -180 || (float) $longitude > 180) {
+                throw new InvalidArgumentException(
+                    'Las coordenadas del header LOCATION no son válidas.'
+                );
+            }
+
             $formattedParams[] = [
-                'type' => 'location'
+                'type' => 'location',
+                'location' => [
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'name' => $name,
+                    'address' => $address,
+                ],
             ];
         }
         else {
@@ -223,6 +246,16 @@ class TemplateMessageBuilder
         ];
 
         return $this;
+    }
+
+    /**
+     * Agrega un header LOCATION con coordenadas para el envío.
+     *
+     * @param  array{latitude: string|float|int, longitude: string|float|int, name?: string, address?: string}  $location
+     */
+    public function addLocationHeader(array $location): self
+    {
+        return $this->addHeader('LOCATION', $location);
     }
 
     /**

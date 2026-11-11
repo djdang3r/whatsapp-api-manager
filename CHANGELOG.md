@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-11
+
+### Added
+- `TemplateMessageBuilder::addLocationHeader()` y soporte de `addHeader('LOCATION', [...])` con latitud, longitud, nombre y dirección, como exige Meta para enviar plantillas con header de ubicación.
+
+### Compatibility
+- Cambio aditivo y compatible hacia atrás. Las llamadas existentes siguen funcionando; `LOCATION` ahora requiere coordenadas válidas en lugar de enviar un objeto incompleto.
+
+
 ## [1.5.4] - 2026-11-11
 
 ### Fixed
