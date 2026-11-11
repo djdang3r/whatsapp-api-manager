@@ -7,6 +7,7 @@ use ScriptDevelop\WhatsappManager\WhatsappApi\Endpoints;
 use ScriptDevelop\WhatsappManager\Exceptions\TemplateComponentException;
 use ScriptDevelop\WhatsappManager\Exceptions\TemplateUpdateException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 use Illuminate\Database\Eloquent\Model;
@@ -89,6 +90,8 @@ class TemplateEditor extends TemplateBuilder
 
             // Actualizar en la base de datos
             $this->updateTemplateInDatabase($fullTemplateResponse);
+
+            $this->syncHeaderMediaPreview();
 
             // Sincronizar relaciones de flujo si hay botones tipo FLOW
             $this->syncFlowRelations();
@@ -268,12 +271,62 @@ class TemplateEditor extends TemplateBuilder
     }
 
     /**
+     * Mantiene la columna `file` alineada con el header multimedia actual.
+     * Es best-effort: nunca debe hacer fallar una edición que Meta aceptó.
+     */
+    protected function syncHeaderMediaPreview(): void
+    {
+        try {
+            $header = $this->getHeader();
+            $format = strtoupper((string) ($header['format'] ?? 'TEXT'));
+            $hasMedia = $header !== null && in_array($format, ['IMAGE', 'VIDEO', 'DOCUMENT'], true);
+
+            if (! $hasMedia) {
+                $this->deleteTemplatePreview($this->template->file);
+                $this->template->update(['file' => null]);
+
+                return;
+            }
+
+            if ($this->headerMediaPreviewUrl === null) {
+                return;
+            }
+
+            $this->deleteTemplatePreview($this->template->file);
+            $this->persistHeaderMediaPreview($this->template);
+        } catch (\Throwable $exception) {
+            Log::channel('whatsapp')->warning('No se pudo sincronizar el preview del media de plantilla.', [
+                'template_id' => $this->template->template_id ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function deleteTemplatePreview(?string $url): void
+    {
+        if ($url === null || $url === '') {
+            return;
+        }
+
+        $path = parse_url($url, PHP_URL_PATH) ?: '';
+        $marker = '/storage/';
+        $position = strpos($path, $marker);
+        $relative = $position === false ? ltrim($path, '/') : substr($path, $position + strlen($marker));
+
+        if ($relative !== '') {
+            Storage::disk('public')->delete($relative);
+        }
+    }
+
+    /**
      * Reinicia el estado del builder
      */
     protected function resetBuilder(): void
     {
         $this->templateData = ['components' => []];
         $this->buttonCount = 0;
+        $this->headerMediaPreviewPath = null;
+        $this->headerMediaPreviewUrl = null;
     }
 
     /*public function setParameterFormat(string $format): self

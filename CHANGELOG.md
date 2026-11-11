@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-10
+
+### Added
+- Preview local del header multimedia de plantillas: el paquete guarda una copia pública best-effort en `whatsapp_templates.file`.
+- La edición de plantillas conserva, reemplaza o elimina ese preview según el header resultante.
+
+### Fixed
+- El header multimedia ya no se sube dos veces: la app pasa la ruta temporal real al builder y el core hace el único Resumable Upload.
+- Un fallo al guardar el preview local no bloquea la creación ni la edición de la plantilla.
+
+### Compatibility
+- Cambio aditivo y compatible hacia atrás. El payload enviado a Meta no cambia.
+- No requiere migración: reutiliza la columna existente `whatsapp_templates.file`.
+
 ## [1.4.0] - 2026-11-10
 
 ### Added

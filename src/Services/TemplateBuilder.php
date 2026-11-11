@@ -7,6 +7,8 @@ use InvalidArgumentException;
 use ScriptDevelop\WhatsappManager\WhatsappApi\ApiClient;
 use ScriptDevelop\WhatsappManager\WhatsappApi\Endpoints;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 //use ScriptDevelop\WhatsappManager\Models\TemplateCategory;
 //use ScriptDevelop\WhatsappManager\Models\WhatsappBusinessAccount;
 
@@ -42,6 +44,12 @@ class TemplateBuilder
     protected FlowService $flowService;
 
     protected string $parameterFormat = 'POSITIONAL';
+
+    /** @var string|null URL pública de preview del header multimedia. */
+    protected ?string $headerMediaPreviewUrl = null;
+
+    /** @var string|null Ruta relativa del preview en el disco público. */
+    protected ?string $headerMediaPreviewPath = null;
 
     /**
      * Constructor de la clase
@@ -343,6 +351,8 @@ return $this;
                 $mediaId = mb_convert_encoding($mediaId, 'UTF-8', 'auto');
             }
 
+            $this->storeHeaderMediaPreview($filePath);
+
             $headerComponent = [
                 'type' => 'HEADER',
                 'format' => $format,
@@ -363,6 +373,76 @@ return $this;
         $this->templateData['components'][] = $headerComponent;
 
         return $this;
+    }
+
+    /**
+     * Guarda una copia local best-effort del media del header. Un fallo de
+     * storage nunca debe abortar la creación/edición de la plantilla.
+     */
+    protected function storeHeaderMediaPreview(string $sourcePath): void
+    {
+        try {
+            if (! is_file($sourcePath)) {
+                return;
+            }
+
+            $extension = pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'bin';
+            $relativePath = 'whatsapp/template-headers/'.Str::uuid().'.'.$extension;
+
+            Storage::disk('public')->put($relativePath, fopen($sourcePath, 'rb'));
+
+            $this->headerMediaPreviewPath = $relativePath;
+            $this->headerMediaPreviewUrl = Storage::disk('public')->url($relativePath);
+        } catch (\Throwable $exception) {
+            Log::channel('whatsapp')->warning('No se pudo guardar el preview local del media de plantilla.', [
+                'error' => $exception->getMessage(),
+            ]);
+            $this->headerMediaPreviewPath = null;
+            $this->headerMediaPreviewUrl = null;
+        }
+    }
+
+    /**
+     * Persiste la URL de preview en la columna `file` de la plantilla.
+     */
+    protected function persistHeaderMediaPreview(Model $template): void
+    {
+        if ($this->headerMediaPreviewUrl === null) {
+            return;
+        }
+
+        try {
+            $template->update(['file' => $this->headerMediaPreviewUrl]);
+        } catch (\Throwable $exception) {
+            Log::channel('whatsapp')->warning('No se pudo persistir el preview del media de plantilla.', [
+                'template_id' => $template->template_id ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Elimina la copia local creada en esta instancia (solo ante fallo).
+     */
+    protected function deleteStoredHeaderMediaPreview(): void
+    {
+        if ($this->headerMediaPreviewPath === null) {
+            return;
+        }
+
+        try {
+            Storage::disk('public')->delete($this->headerMediaPreviewPath);
+        } catch (\Throwable) {
+            // Best effort: el fallo original es el que debe propagarse.
+        }
+
+        $this->headerMediaPreviewPath = null;
+        $this->headerMediaPreviewUrl = null;
+    }
+
+    public function getHeaderMediaPreviewUrl(): ?string
+    {
+        return $this->headerMediaPreviewUrl;
     }
 
     /**
@@ -1237,6 +1317,8 @@ return $this;
                 'json' => json_encode($this->templateData, JSON_UNESCAPED_UNICODE),
             ]);
 
+            $this->persistHeaderMediaPreview($template);
+
             try {
                 $endpoint = Endpoints::build(Endpoints::GET_TEMPLATE, [
                     'template_id' => $response['id'],
@@ -1276,9 +1358,13 @@ return $this;
             // Reiniciar el estado del builder
             $this->templateData = ['components' => []];
             $this->buttonCount = 0;
+            $this->headerMediaPreviewPath = null;
+            $this->headerMediaPreviewUrl = null;
 
             return $template;
         } catch (\GuzzleHttp\Exception\ClientException $e) {
+            $this->deleteStoredHeaderMediaPreview();
+
             // Manejo específico para errores de Guzzle
             $response = $e->getResponse();
             $responseBody = json_decode($response->getBody(), true);
@@ -1304,6 +1390,8 @@ return $this;
             ]);
             throw new \Exception('Error al crear plantilla en WhatsApp: ' . $errorUserMsg);
         } catch (\Exception $e) {
+            $this->deleteStoredHeaderMediaPreview();
+
             Log::channel('whatsapp')->error('Error general al guardar la plantilla.', [
                 'error_message' => $e->getMessage(),
             ]);
