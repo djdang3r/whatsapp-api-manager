@@ -391,7 +391,24 @@ return $this;
                 return;
             }
 
-            $extension = pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'bin';
+            $extension = strtolower((string) pathinfo($sourcePath, PATHINFO_EXTENSION));
+
+            if ($extension === '' || in_array($extension, ['tmp', 'bin'], true)) {
+                $mime = mime_content_type($sourcePath) ?: '';
+                $extension = match ($mime) {
+                    'image/jpeg' => 'jpg',
+                    'image/png' => 'png',
+                    'image/webp' => 'webp',
+                    'video/mp4' => 'mp4',
+                    'video/3gpp' => '3gp',
+                    'application/pdf' => 'pdf',
+                    'application/msword' => 'doc',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+                    'text/plain' => 'txt',
+                    default => 'bin',
+                };
+            }
+
             $relativePath = 'whatsapp/template-headers/'.Str::uuid().'.'.$extension;
 
             Storage::disk('public')->put($relativePath, fopen($sourcePath, 'rb'));

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-11-11
+
+### Fixed
+- El archivo de preview de un header multimedia conserva una extensión correcta (`png`, `jpg`, `mp4`, `pdf`, etc.) cuando el archivo temporal no trae extensión. Evita publicar una imagen como `.bin` con `application/octet-stream`.
+
 ## [1.5.3] - 2026-11-11
 
 ### Fixed
