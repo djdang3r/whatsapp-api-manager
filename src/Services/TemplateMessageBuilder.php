@@ -819,15 +819,33 @@ class TemplateMessageBuilder
 
         $this->template = $template;
 
-        if (!$this->templateVersion) {
+        if (! $this->templateVersion) {
             $this->templateVersion = $this->template->activeVersion;
-
-            if( !$this->templateVersion ) {
-                throw new \Exception("No hay versión aprobada para la plantilla: {$this->templateIdentifier}");
-            }
         }
 
-        $rawStructure = $this->templateVersion->template_structure;
+        if ($this->templateVersion) {
+            $rawStructure = $this->templateVersion->template_structure;
+        } else {
+            // Race de aprobación: Meta ya puede reportar APPROVED antes de que
+            // el webhook cree la versión local. Si la plantilla está aprobada y
+            // el JSON local tiene componentes, usarlo como respaldo.
+            $status = strtoupper((string) $this->template->status);
+            $json = is_array($this->template->json)
+                ? $this->template->json
+                : json_decode((string) $this->template->json, true);
+            $components = is_array($json) ? ($json['components'] ?? null) : null;
+
+            if ($status !== 'APPROVED' || ! is_array($components) || $components === []) {
+                throw new \Exception("No hay versión aprobada para la plantilla: {$this->templateIdentifier}");
+            }
+
+            Log::channel('whatsapp')->warning('Plantilla aprobada sin versión local; usando JSON como respaldo.', [
+                'template_id' => $template->template_id ?? null,
+                'template' => $this->templateIdentifier,
+            ]);
+
+            $rawStructure = $components;
+        }
 
         $this->templateStructure = [
             'language' => $this->template->language,
