@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-11-11
+
+### Fixed
+- `createUploadSession()` normaliza `app_id` con `trim()`. Un `app_id` histórico con espacios hacía que cURL rechazara la URL de Resumable Upload con `URL rejected: Bad path`.
+- El `session_id` devuelto por Meta también se normaliza antes de construir la URL de upload.
+
 ## [1.5.1] - 2026-11-11
 
 ### Fixed

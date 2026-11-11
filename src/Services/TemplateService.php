@@ -1043,10 +1043,12 @@ class TemplateService
         // Extraer solo el nombre del archivo
         $fileName = basename($filePath);
 
-        // Obtener el App ID (Usar el de la cuenta, o el global si es nulo por registro embebido)
-        $appId = !empty($account->app_id) ? $account->app_id : config('whatsapp.meta_auth.client_id');
+        // Obtener el App ID (Usar el de la cuenta, o el global si es nulo por registro embebido).
+        // Algunos registros históricos guardan espacios accidentales; sin trim(),
+        // cURL rechaza la URL de upload con "URL rejected: Bad path".
+        $appId = trim((string) (! empty($account->app_id) ? $account->app_id : config('whatsapp.meta_auth.client_id')));
 
-        if (empty($appId)) {
+        if ($appId === '') {
             throw new \RuntimeException("No se encontró un App ID válido para crear la sesión de carga. Verifica la configuración 'whatsapp.meta_auth.client_id'.");
         }
 
@@ -1240,8 +1242,9 @@ class TemplateService
 
         $fileSize = filesize($filePath);
 
-        // Limpiar sessionId para remover prefijo duplicado 'upload:'
-        $cleanSessionId = str_starts_with($sessionId, 'upload:') ? substr($sessionId, 7) : $sessionId;
+        // Limpiar sessionId para remover prefijo duplicado 'upload:' y espacios
+        // que Meta puede devolver en la respuesta.
+        $cleanSessionId = trim(str_starts_with($sessionId, 'upload:') ? substr($sessionId, 7) : $sessionId);
         $baseUrl = config('whatsapp.api.base_url', 'https://graph.facebook.com');
         $version = config('whatsapp.api.version', 'v22.0');
         $url = rtrim($baseUrl, '/') . '/' . ltrim($version, '/') . "/upload:$cleanSessionId";
